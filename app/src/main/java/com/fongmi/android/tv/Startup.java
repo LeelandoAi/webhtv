@@ -5,6 +5,7 @@ import android.content.Context;
 import androidx.annotation.NonNull;
 import androidx.startup.Initializer;
 
+import com.fongmi.android.tv.api.loader.SpiderCrashGuard;
 import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.ui.activity.CrashActivity;
 import com.github.catvod.bean.Doh;
@@ -30,6 +31,7 @@ public class Startup implements Initializer<Void> {
     @Override
     public Void create(@NonNull Context context) {
         CaocConfig.Builder.create().trackActivities(true).backgroundMode(CaocConfig.BACKGROUND_MODE_SILENT).errorActivity(CrashActivity.class).apply();
+        SpiderCrashGuard.install();
         Logger.addLogAdapter(new AndroidLogAdapter(PrettyFormatStrategy.newBuilder().methodCount(0).showThreadInfo(false).tag("TV").build()));
         installEventBus();
         OkHttp.dns().setDoh(() -> Doh.objectFrom(Setting.getDoh()));

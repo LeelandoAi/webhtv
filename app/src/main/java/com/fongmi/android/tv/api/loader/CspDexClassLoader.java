@@ -8,6 +8,10 @@ final class CspDexClassLoader extends DexClassLoader {
         super(dexPath, optimizedDirectory, librarySearchPath, parent);
     }
 
+    Class<?> loadedClass(String name) {
+        return findLoadedClass(name);
+    }
+
     @Override
     protected synchronized Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
         if (!CspClassLoadingPolicy.isChildFirst(name)) return super.loadClass(name, resolve);

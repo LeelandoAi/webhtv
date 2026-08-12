@@ -56,6 +56,7 @@ public class JarLoader {
             spiders.clear();
             locks.clear();
             recent = null;
+            SpiderJarRegistry.clear();
         }
     }
 
@@ -80,11 +81,12 @@ public class JarLoader {
         }
         String cachePath = Path.jar().getAbsolutePath();
         SpiderDebug.log("jar-loader", "load start key=%s file=%s size=%s cache=%s", key, file.getAbsolutePath(), file.length(), cachePath);
-        DexClassLoader loader = new CspDexClassLoader(file.getAbsolutePath(), cachePath, cachePath, App.get().getClassLoader());
+        CspDexClassLoader loader = new CspDexClassLoader(file.getAbsolutePath(), cachePath, cachePath, App.get().getClassLoader());
         invokeInit(key, loader);
         invokeNetworkCompat(key, loader);
         invokeProxy(key, loader);
         loaders.put(key, loader);
+        SpiderJarRegistry.register(key, loader);
         SpiderDebug.log("jar-loader", "load done key=%s cost=%sms", key, System.currentTimeMillis() - start);
     }
 
@@ -157,6 +159,10 @@ public class JarLoader {
 
     public void parseJar(String key, String jar) {
         if (loaders.containsKey(key)) return;
+        if (SpiderIsolation.isIsolated(key)) {
+            SpiderDebug.log("jar-loader", "parse skip isolated key=%s", key);
+            return;
+        }
         if (jar.startsWith("assets")) jar = UrlUtil.convert(jar);
         Object lock = locks.computeIfAbsent(key, k -> new Object());
         synchronized (lock) {

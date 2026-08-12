@@ -9,6 +9,7 @@ import androidx.core.content.FileProvider;
 
 import com.fongmi.android.tv.App;
 import com.fongmi.android.tv.R;
+import com.fongmi.android.tv.api.loader.SpiderIsolation;
 import com.fongmi.android.tv.impl.Callback;
 import com.github.catvod.utils.Path;
 
@@ -84,6 +85,7 @@ public class FileUtil {
         Task.execute(() -> {
             Path.clear(Path.cache());
             AppCache.clearLegacyPreferences();
+            SpiderIsolation.reset();
             // 清理集数位置缓存
             com.fongmi.android.tv.bean.EpisodePositionCache.get().clear();
             App.post(callback::success);
