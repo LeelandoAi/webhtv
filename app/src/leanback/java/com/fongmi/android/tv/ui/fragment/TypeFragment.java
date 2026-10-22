@@ -278,6 +278,27 @@ public class TypeFragment extends BaseFragment implements CustomScroller.Callbac
         else mBinding.swipeLayout.setRefreshing(true);
     }
 
+    public boolean resetFilter() {
+        if (mFilters.isEmpty()) return false;
+        boolean changed = !mExtends.isEmpty();
+        for (Filter filter : mFilters) {
+            for (Value value : filter.getValue()) {
+                if (value.isSelected()) changed = true;
+                value.setSelected(false);
+            }
+        }
+        mExtends.clear();
+        if (filterVisible) {
+            hideFilter();
+            showFilter();
+        }
+        if (changed) {
+            onRefresh();
+            Notify.show(R.string.filter_reset);
+        }
+        return changed;
+    }
+
     public void onRefresh() {
         getVideo();
     }
