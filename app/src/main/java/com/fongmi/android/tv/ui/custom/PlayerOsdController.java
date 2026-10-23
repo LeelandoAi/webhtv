@@ -504,6 +504,13 @@ public class PlayerOsdController {
      * Startup timeline plus the stage that consumed the most time, so a slow start can
      * be attributed on-device instead of requiring a debug log export.
      */
+    private String getStartupText(PlayerManager player) {
+        String summary = player.getStartupSummary();
+        if (TextUtils.isEmpty(summary)) return "";
+        String slowest = player.getSlowestStartupStage();
+        return TextUtils.isEmpty(slowest) ? summary : summary + "  最慢 " + slowest;
+    }
+
     /**
      * "掉帧 12（1.4/秒）" for EXO. The rate is what the number should be read against: media3
      * settles a renderer's dropped-frame accumulator from onStopped(), so a pause adds
@@ -517,6 +524,11 @@ public class PlayerOsdController {
         return "掉帧 " + dropped + "（" + frameDropRateFormat.format(rate) + "/秒）";
     }
 
+    /**
+     * Whether the drop count is worth a verdict. The raw total is only comparable to a fixed
+     * budget while there is no measured play time to divide by; after that the rate decides,
+     * so a pause that settles the accumulator no longer reads as decoder pressure.
+     */
     private boolean excessiveDroppedFrames(PlayerManager player) {
         if (!player.isExo()) return player.getDroppedFrames() >= DROPPED_FRAMES_RAW_COUNT_DIAGNOSIS;
         long playTimeMs = PlaybackAnalyticsListener.playTimeMs();
@@ -524,13 +536,6 @@ public class PlayerOsdController {
             return player.getDroppedFrames() >= DROPPED_FRAMES_RAW_COUNT_DIAGNOSIS;
         }
         return PlaybackAnalyticsListener.droppedFramesPerSecond() >= DROPPED_FRAMES_PER_SECOND_DIAGNOSIS;
-    }
-
-    private String getStartupText(PlayerManager player) {
-        String summary = player.getStartupSummary();
-        if (TextUtils.isEmpty(summary)) return "";
-        String slowest = player.getSlowestStartupStage();
-        return TextUtils.isEmpty(slowest) ? summary : summary + "  最慢 " + slowest;
     }
 
     private String getDiagnosis(PlayerManager player, PlaybackAnalyticsListener.Snapshot snapshot, Format video, VideoTrackState videoTrack, AudioTrackState audioTrack, AudioPlaybackDiagnostics.Snapshot audioDetails, boolean localSource) {

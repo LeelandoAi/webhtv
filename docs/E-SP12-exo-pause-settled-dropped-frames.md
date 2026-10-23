@@ -215,3 +215,36 @@ playback-metrics: trace=p-8tmye-1 droppedFrames=1 total=1 elapsed=31118ms playTi
 2. `PanDiagnosticVerdict` / `PanNetworkDiagnosticDialog` 仍用裸计数 `60` 作为判定输入（网络诊断域），本次未动；若后续统一口径需另立任务。
 3. OSD `帧率匹配 开` 是**硬编码文案**，不读实际设置（既有小缺陷，与本任务无关，未修）。
 4. `PlayerOsdController` 的 OSD 文案无源码断言测试（`app/src/test/.../ui/custom` 下无测试文件），本次新增的纯函数类已独立可测，格式化辅助仍无回归锁。
+
+---
+
+## 8. 复核轮（2026-10-23 14:00 +08:00 起）
+
+### 8.1 复核范围
+
+本轮复核覆盖 `origin/beta..dev4` 的全部 3 个未推送提交（合并提交 `7443e1e4742` + `fd5bcf109ee` + `82a2731f4ef`），即"已提交未推送"的全部代码与文档改动，逐文件对照 §4 实现记录核对。
+
+### 8.2 发现与处置
+
+| 编号 | 严重度 | 位置 | 问题 | 处置 |
+| --- | --- | --- | --- | --- |
+| R1 | low（文档/可读性，不改行为） | `app/src/main/java/com/fongmi/android/tv/ui/custom/PlayerOsdController.java` §4.3 新增方法插入点 | 新增的 `droppedFrameText` / `excessiveDroppedFrames` 连同类 javadoc 被插在 `getStartupText` 的 javadoc 与 `getStartupText` 本体之间，导致 `getStartupText` 的 javadoc 悬空、正文与文档被拆开；`excessiveDroppedFrames` 自身反而没有 javadoc | 把 `getStartupText` 归位到自己的 javadoc 正下方，新方法整体下移到其后，并补上 `excessiveDroppedFrames` 的 javadoc（说明"有实测播放时长后按速率判定，暂停结算不再读成解码压力"）。净改动 12 插入 / 7 删除，方法体与阈值逻辑零变化 |
+
+其余项复核未发现问题，正面证据见 §8.3。
+
+### 8.3 复核通过项（正面证据）
+
+- **无重复/丢失定义**：`getStartupText` 仅 :507 定义、:475 调用；`droppedFrameText` :520 定义、:474 调用；`excessiveDroppedFrames` :532 定义、:562 调用，与 §4.3 描述一致。
+- **口径实现与 §3 决策逐条对齐**：`DroppedFrameAccounting` 的暂停结算分流、播放时长跨暂停累加、开区间计入 `now`、除数非正返回 0、负上报钳位、饱和累加全部有单测锁定；`ExoDecoderRuntimeSession.withinHealthyDropRate` 在 `playTimeMs<=0` 时回退到固定 23 帧且**不放宽**。
+- **生命周期时序正确**：`ExoPlayerEngine` 的 `finishDecoderRuntimeAttempt` → `finishSession` → `beginSession(reset)` 均在旧 player 存活期间调用，跨播放会话不会串账。
+- **合并未引入回归**：`7443e1e4742` 合入的 beta 改动与本任务文件无重叠冲突，上述读取在合并后重新做过一遍。
+
+### 8.4 复核后验证
+
+| 项 | 命令 | 结果 |
+| --- | --- | --- |
+| 单测 | `:app:testLeanbackArm64_v8aDebugUnitTest --tests "…DroppedFrameAccountingTest" --tests "…ExoDecoderRuntimeSessionTest"` | BUILD SUCCESSFUL in 2m 27s；DroppedFrameAccountingTest 8 tests / 0 failures / 0 errors；ExoDecoderRuntimeSessionTest 16 tests / 0 failures / 0 errors |
+| 编译 | `:app:compileMobileArm64_v8aDebugJavaWithJavac`（同一次执行） | 成功；同批 leanback arm64-v8a 编译任务亦通过 |
+| 空白字符 | `git diff --check HEAD` | 空输出 |
+
+结论：复核轮共发现 1 项低严重度文档缺陷，已修复并验证通过，修复后复评未再发现新问题。
