@@ -40,11 +40,19 @@ public class Spider extends com.github.catvod.crawler.Spider {
                 // all-empty SpiderNull, so a single unreachable .py made home,
                 // category and search silently render nothing.  Log and continue; a
                 // spider that really needs the module fails later with a clear
-                // ImportError instead.
+                // ImportError instead.  Throwable rather than Exception so a JVM-level
+                // Error (OutOfMemoryError, StackOverflowError) raised inside the download
+                // call path cannot abort init() either; a Python exception arrives as
+                // Chaquopy's PyException, which is itself a RuntimeException.
                 try {
                     download(item + ".py");
-                } catch (Exception e) {
+                } catch (Throwable e) {
                     SpiderDebug.log(TAG, "depend download failed name=%s error=%s", item, e);
+                    // SpiderDebug.log() is gated on DebugLogStore.acceptsTag(), which is
+                    // false whenever 调试日志 is off (the default), so the structured line
+                    // alone would leave a skipped dependency invisible in Logcat.  Keep the
+                    // unconditional channel too, as PyLoader does for a failed init.
+                    e.printStackTrace();
                 } finally {
                     close(item);
                 }

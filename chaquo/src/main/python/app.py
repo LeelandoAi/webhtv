@@ -83,11 +83,21 @@ def download(path, api):
     # copy with an HTML error page, and SourceFileLoader would then report a confusing
     # SyntaxError instead of the real download failure.  writeFile() is atomic, so a
     # raised error leaves any existing file untouched.
+    # A 3xx status without a Location header also has to be rejected here rather than
+    # written: redirect() returns that response only when there is nowhere left to go,
+    # so its body is a redirect stub, not the dependency source.
     if api.startswith('http'):
         rsp = redirect(api)
-        if rsp.status_code >= 400:
+        if rsp.status_code >= 300:
             raise ValueError(f'download failed ({rsp.status_code}): {api}')
         writeFile(path, rsp.content)
+    elif '://' in api:
+        # Such a source cannot be the script itself.  Writing the URL text would cache a
+        # file that only fails later as a SyntaxError from SourceFileLoader, so a bad
+        # getDependence() (for example one that returns a full 'file://' path) would
+        # leave a permanently broken cache entry behind.  Raise the real reason instead;
+        # Spider.init() logs it and continues.
+        raise ValueError(f'download source is not http(s): {api}')
     else:
         writeFile(path, str.encode(api))
 
@@ -124,23 +134,24 @@ def getName(ru):
     return result
 
 
-def manualVideoCheck(ru):
-    # Optional bridge extension: Spider.java calls it from the web-sniffer path, but a
-    # spider that does not inherit base/spider.py has no such attribute, and an
-    # unguarded call raises AttributeError.  Absent means "no opinion", i.e. false.
-    getter = getattr(ru, 'manualVideoCheck', None)
+def optionalBool(ru, name, *args):
+    # Shared rule for the optional boolean bridge extensions: Spider.java calls these
+    # from the web-sniffer path, but a spider that does not inherit base/spider.py has
+    # no such attribute, and an unguarded call raises AttributeError.  Absent (or
+    # present-but-not-callable) means "no opinion", i.e. false, while a present
+    # implementation's own exception still surfaces instead of being swallowed here.
+    getter = getattr(ru, name, None)
     if not callable(getter):
         return False
-    return bool(getter())
+    return bool(getter(*args))
+
+
+def manualVideoCheck(ru):
+    return optionalBool(ru, 'manualVideoCheck')
 
 
 def isVideoFormat(ru, url):
-    # Same optional-extension rule as manualVideoCheck: a missing implementation is a
-    # "no opinion" false, while a present implementation's own exception still surfaces.
-    getter = getattr(ru, 'isVideoFormat', None)
-    if not callable(getter):
-        return False
-    return bool(getter(url))
+    return optionalBool(ru, 'isVideoFormat', url)
 
 
 def init(ru, extend):
