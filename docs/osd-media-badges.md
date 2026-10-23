@@ -65,18 +65,42 @@
 | `app/src/main/res/drawable/shape_player_osd_badge.xml` | 新增自绘 chip 背景 |
 | 三语 `strings.xml` | `display_media_badges`、`osd_media_badge_position`、`select_media_badge_position` 四角数组；`select_player_osd` **末尾**追加第 8 项（既有 6 项顺序保持不变） |
 | 两设置页布局 + `SettingPlayerActivity` / `SettingPlayerFragment` | `@+id/osdMediaBadgePosition` 行 + `ChoiceDialog.showSingle` 四角单选（leanback 保留 focusable 以支持遥控） |
+| `app/src/main/res/layout/dialog_display.xml` | 新增 `@+id/display_media_badges` 芯片（`@style/DisplayControl`，默认 gone，仅 `Mode.PLAYER_OSD` 显示） |
+| 两 flavor `app/src/{leanback,mobile}/res/layout/dialog_control.xml` | OSD 芯片行追加 `@+id/displayMediaBadges`（`@style/ControlSheetButton`） |
+| `app/src/main/java/com/fongmi/android/tv/ui/dialog/DisplayDialog.java` | `enum Display` 加 `MEDIA_BADGES`、`setDisplay` switch 写 `putDisplayMediaBadges`、`initPlayerOsdView()`/`initPlayerOsdEvent()` 接线 |
+| 两 flavor `app/src/{leanback,mobile}/java/.../ui/dialog/ControlDialog.java` | `displays` 列表末尾追加 `binding.displayMediaBadges`；leanback 另把该芯片加入 `bindRemoteFocus()` 焦点链 |
 
 复用既有设施，不新增依赖：屏显渲染走 `PlayerOsdController.render()` 既有多分支结构；位置单选走既有 `ChoiceDialog.showSingle`；设置持久化走既有 `Prefers`；多选开关走既有 `PlayerOsdDialog`（`select_player_osd` 驱动，`getItemCount() = min(items.length, checked.length)`，8 项 + 8 个 checked 自然渲染）。
 
-## 7. 已知缺口（有意为之）
+## 7. 开关入口（三个，全部等价）
+
+| 入口 | 载体 | 文案 |
+| --- | --- | --- |
+| 设置 → 屏显设置（多选） | `select_player_osd` 第 8 项 → `PlayerSettingsRow` 开关 | 「媒体信息」（zh-rCN）/「媒體資訊」（zh-rTW）/「Media info」 |
+| 播放控件 → 屏显芯片弹窗（TV/手机） | 两 flavor `ControlDialog` 第 8 个芯片 `displayMediaBadges` | 同上 |
+| TMDB 详情页内联控件 → 屏显芯片弹窗 | `DisplayDialog`（`Mode.PLAYER_OSD`）`display_media_badges` | 同上 |
+
+三者都读写同一对键（`player_osd_media_badges` + `player_osd_media_badge_position`），`ControlDialog.toggleDisplaySetting(index)` 与 `DisplayDialog.setDisplay(...)` 都汇入 `PlayerSetting.putDisplayChecked(...)` / `putDisplayMediaBadges(...)`，随后调用 `onDisplayChanged()` / `inlineControlDialogDisplayChanged()`，由 `PlayerOsdController.render()` 下一次轮询生效——因此三个入口互不冲突，也不会出现偏移一位的索引错位（`getDisplayChecked()` 与 `displays` 列表均按同一顺序追加到末尾）。
+
+## 8. 已知缺口（有意为之）
 
 - 徽标只在屏显「控制栏隐藏」的常驻路径渲染；打开控制栏时按既有设计整体隐藏（与标题/时间/进度一致）。
-- 「屏显设置」多选弹窗的勾选数量上限由设置页 `getOsdText()` 决定：它只统计到 `display_title` 为止的 7 项，因此勾选徽标后该行摘要不会显示「媒体信息」，但开关本身生效。修法是同一 scope 内的文本摘要函数，未在本任务改动。
+- 徽标与标题/分辨率/时间**允许同角共存**（用户确认）：徽标容器是独立 `FlexboxLayout`，不占用四个既有 `MaterialTextView` 的位置，因此同角重叠时由 `layout_gravity` 决定层级，二者可能相互覆盖——这是有意的「零侵入」取舍，避免改动既有角标排版契约。
+- 只显示可证事实：HLS/DASH 清单 URL（`.m3u8`/`.mpd`）永不产生容器徽标；MPV/IJK 引擎的 `Format` 不设 `containerMimeType`，其容器徽标只能来自 URL 扩展名白名单，网盘直链可能因此缺容器徽标。
+- 不显示发布标签（WEB-DL / REMUX / 压制组）与字幕语言徽标：本源为爬虫直链/HLS/网盘，无法从运行时事实反推，硬猜即成编造。
 
-播放控件里的「屏显」快捷芯片弹窗（`DisplayDialog` / 两 flavor `ControlDialog` / `dialog_display.xml` / `dialog_control.xml`）**仍是 7 个芯片**，没有第 8 个媒体徽标芯片。原因：这 4 个文件不在本任务 scope 内，且徽标开关已可由「设置 → 屏显设置」多选弹窗完整开关，芯片弹窗的 display 回调仍会重启渲染。将来若要补：两处相关测试断言都是"包含"语义（`DISPLAY_IDS` 逐个 `contains`），追加 `@+id/display_media_badges` 与芯片即可，不需要改既有断言，但需要扩张 scope 并同步 `DisplayDialog` 的 `enum Display` / `setDisplay` switch 与两 flavor `ControlDialog.displays`。
+## 9. 验证
 
-## 8. 验证
+- `./gradlew :app:testMobileArm64_v8aDebugUnitTest --tests "*MediaBadgeResolverTest*" --tests "*PlayerDisplaySettingSyncTest*" --tests "*ControlDialogOsdSettingsTest*"`
+- `./gradlew :app:testLeanbackArm64_v8aDebugUnitTest --tests "*PlayerDisplaySettingSyncTest*" --tests "*MediaBadgeResolverTest*"`
+- `./gradlew :app:compileLeanbackArm64_v8aDebugJavaWithJavac`
+### 设备实测（emulator-5554，x86_64 + ARM 转译，1920×1080，sdk28，zh-CN）
 
-- `./gradlew :app:testMobileDebugUnitTest --tests "*MediaBadgeResolverTest*" --tests "*PlayerDisplaySettingSyncTest*"`
-- `./gradlew :app:compileMobileDebugJavaWithJavac :app:compileLeanbackDebugJavaWithJavac`
+- 第 8 个芯片：播放控件弹窗内 `resource-id=com.silent.android.webhtv:id/displayMediaBadges`、`text=媒体信息`，与 `displayTitle`/`displayParams` 同一行；点击后 `selected` false→true，prefs 落盘 `<boolean name="player_osd_media_badges" value="true" />`。
+- 屏显设置多选摘要：勾选后 `@id/osdText` 显示「媒体信息」，证明 8 项 `select_player_osd` 与 8 元素 `getDisplayChecked()` 长度同步、无索引错位。
+- 位置四角（`player_osd_media_badge_position` → `@id/osdMediaBadges` bounds，容器同宽 733px，left=67 / right=939）：
+  `0` 左上 `[67,95][800,131]`、`1` 右上 `[206,95][939,131]`、`2` 左下 `[67,527][800,563]`、`3` 右下 `[206,527][939,563]`（默认）。
+- 设置页 `@id/osdMediaBadgePosition` 行 → `ChoiceDialog` 四角单选，选中后行值即时更新并落盘对应 `int`。
+- 徽标内容实测（竖屏 H.264/AAC 样片）：`656X1280` / `H.264` / `29.94FPS` / `3.1MBPS` / `MP4A.40.2 2.0 44.1KHZ 64KBPS` / `MP4`。
+
 - 既有回归守卫（必须保持通过）：`PlayerDisplaySettingSyncTest`（数组顺序、设置页偏好、四角白色文本、persistentSuppressed 顺序、Backup 键）、`ControlDialogOsdSettingsTest`（两 flavor 芯片 id 与 `getDisplayChecked()`/`putDisplayChecked(checked)`、live 5 项、`onDisplayChanged()` 重启）。
