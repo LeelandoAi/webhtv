@@ -125,15 +125,18 @@
 
 ## 7. 回滚
 
-- **本轮评审修复**：单次提交回滚即可（`git revert <评审提交>`），只涉及两个方法体 + 一个测试方法 + 两份文档；
+- **本轮评审修复**：单次提交回滚即可（`git revert eaf0ba87c2`），只涉及两个方法体 + 一个测试方法 + 两份文档；
   生产行为回到 `759860e70b` 的原始实现（C1 缺陷与 C10 无意义重建随之回来）。
 - **整体回退到评审前**：`git reset --hard 759860e70b`（保留该提交）。
 - 无偏好写入、无数据库/协议/二进制/schema/资源格式/依赖变更。
 
 ## 8. 交付坐标
 
-- 评审/修复提交：（提交后回填）
-- Recovery tag：（提交后回填）
-- 推送：（回填）
-- PR：（回填）
-- 拉取：（回填）
+| 项 | 值 |
+| --- | --- |
+| 评审/修复提交 | `eaf0ba87c2cca1f32e6f780b9224f5c13ae67da7`（`review(C100): 复评 TV 分类长按重置筛选并修 2 项（长按 latch 残留 / 无变化时重建面板）`，5 files changed, 180 insertions(+), 10 deletions(-)） |
+| Recovery tag | `recovery/C100-TV-FILTER-RESET-REVIEW/20261023051126-eaf0ba87c2cc`（由任务守卫 `finish` 创建） |
+| 推送 | `git push origin dev3` → `fe9be22604..eaf0ba87c2  dev3 -> dev3`（`origin` = `https://github.com/Silent1566/webhtv.git`） |
+| PR | [#482 feat(tv): 分类按钮长按重置筛选 + C100 复评修复（长按 latch 残留 / 无变化重建面板）](https://github.com/Silent1566/webhtv/pull/482)，base `beta` ← head `dev3`，中文描述含具体改动；只创建，未合并 |
+| 拉取 | `git fetch origin --prune` + `git pull --ff-only origin dev3` → `Already up to date.`；`HEAD` = `origin/dev3` = `eaf0ba87c2` |
+| 交付时工作树 | 仅 `?? %SystemDrive%/`、`?? .design-evidence/`（既有脏路径，保持不动、不入库）；临时 PR 正文文件已删除 |
