@@ -72,6 +72,26 @@ def redirect(url, timeout=REDIRECT_TIMEOUT, maxHops=REDIRECT_MAX_HOPS, verify=Tr
     raise ValueError(f'too many redirects (limit {maxHops})')
 
 
+def download(path, api):
+    # Spider.init() calls this once for every name returned by getDependence(), so the
+    # contract is "materialise one dependency .py file at path".  Two sources exist:
+    #   * http(s): fetch it, following redirects manually (redirect() already bounds
+    #     each hop by timeout and the whole chain by maxHops).
+    #   * anything else: the api string *is* the source, matching the inline-script
+    #     convention the loader uses for non-http sites.
+    # An error body must not be written: it would replace a previously cached, valid
+    # copy with an HTML error page, and SourceFileLoader would then report a confusing
+    # SyntaxError instead of the real download failure.  writeFile() is atomic, so a
+    # raised error leaves any existing file untouched.
+    if api.startswith('http'):
+        rsp = redirect(api)
+        if rsp.status_code >= 400:
+            raise ValueError(f'download failed ({rsp.status_code}): {api}')
+        writeFile(path, rsp.content)
+    else:
+        writeFile(path, str.encode(api))
+
+
 def str2json(content):
     # Deliberately strict: every caller passes JSON that the Java bridge produced, so
     # a decode failure means the contract was broken and must not be swallowed into a
@@ -102,6 +122,25 @@ def getDependence(ru):
 def getName(ru):
     result = ru.getName()
     return result
+
+
+def manualVideoCheck(ru):
+    # Optional bridge extension: Spider.java calls it from the web-sniffer path, but a
+    # spider that does not inherit base/spider.py has no such attribute, and an
+    # unguarded call raises AttributeError.  Absent means "no opinion", i.e. false.
+    getter = getattr(ru, 'manualVideoCheck', None)
+    if not callable(getter):
+        return False
+    return bool(getter())
+
+
+def isVideoFormat(ru, url):
+    # Same optional-extension rule as manualVideoCheck: a missing implementation is a
+    # "no opinion" false, while a present implementation's own exception still surfaces.
+    getter = getattr(ru, 'isVideoFormat', None)
+    if not callable(getter):
+        return False
+    return bool(getter(url))
 
 
 def init(ru, extend):

@@ -3,6 +3,7 @@ package com.fongmi.chaquo;
 import android.content.Context;
 
 import com.chaquo.python.PyObject;
+import com.github.catvod.crawler.SpiderDebug;
 import com.github.catvod.utils.Path;
 import com.github.catvod.utils.UriUtil;
 import com.github.catvod.utils.Util;
@@ -14,6 +15,8 @@ import java.util.List;
 import java.util.Map;
 
 public class Spider extends com.github.catvod.crawler.Spider {
+
+    private static final String TAG = "python-spider";
 
     private final PyObject app;
     private final PyObject obj;
@@ -32,8 +35,19 @@ public class Spider extends com.github.catvod.crawler.Spider {
         PyObject dependence = app.callAttr("getDependence", obj);
         if (dependence != null) {
             for (PyObject item : dependence.asList()) {
-                download(item + ".py");
-                close(item);
+                // A dependency that cannot be fetched must not abort init(): that used
+                // to propagate to PyLoader, which degrades the whole site to an
+                // all-empty SpiderNull, so a single unreachable .py made home,
+                // category and search silently render nothing.  Log and continue; a
+                // spider that really needs the module fails later with a clear
+                // ImportError instead.
+                try {
+                    download(item + ".py");
+                } catch (Exception e) {
+                    SpiderDebug.log(TAG, "depend download failed name=%s error=%s", item, e);
+                } finally {
+                    close(item);
+                }
             }
             close(dependence);
         }

@@ -1,16 +1,21 @@
 """Bridge-contract tests for chaquo/src/main/python/app.py.
 
-Two groups:
+Three groups:
   * getDependence: the chaquo bridge calls it unconditionally during Spider.init().
     A single-file spider that does not inherit base/spider.py has no such attribute, so
     an unguarded call raised AttributeError, PyLoader degraded the site to an all-empty
     SpiderNull, and home/category/search silently rendered nothing.
-  * writeFile / redirect / str2json: the three helpers that had no failure guards.
+  * writeFile / redirect / str2json / download: the helpers that had no failure guards.
+    download() was deleted from app.py while Spider.java kept calling it, so any spider
+    whose getDependence() returned a name failed at init and was degraded to SpiderNull.
+  * BridgeContractTest: every app.callAttr("<name>") in the Java bridge must resolve to
+    a callable attribute of app.py, so the same drift cannot ship silently again.
 """
 
 import importlib.util
 import io
 import os
+import re
 import shutil
 import sys
 import tempfile
@@ -26,9 +31,10 @@ SOURCE = Path(__file__).resolve().parents[2] / "main/python"
 
 
 class _Response:
-    def __init__(self, headers=None, status_code=200):
+    def __init__(self, headers=None, status_code=200, content=b""):
         self.headers = dict(headers or {})
         self.status_code = status_code
+        self.content = content
 
 
 class _RequestsStub(types.ModuleType):
@@ -330,8 +336,111 @@ class Str2JsonTest(unittest.TestCase):
             bridge.str2json(None)
 
     def test_bridge_helpers_are_importable_by_remote_scripts(self):
-        for name in ("writeFile", "redirect", "str2json", "spider"):
+        for name in ("writeFile", "redirect", "str2json", "spider", "download",
+                     "manualVideoCheck", "isVideoFormat"):
             self.assertTrue(callable(getattr(bridge, name, None)), name)
+
+
+class DownloadTest(unittest.TestCase):
+    """download() materialises one dependency .py, and must not corrupt a cached copy."""
+
+    def setUp(self):
+        requests_stub.calls = []
+        requests_stub.scripted = []
+        self.dir = tempfile.mkdtemp()
+        self.path = os.path.join(self.dir, "requests.py")
+
+    def tearDown(self):
+        shutil.rmtree(self.dir, ignore_errors=True)
+
+    def test_http_source_writes_the_response_body(self):
+        requests_stub.scripted = [_Response({}, 200, b"# dependency body\n")]
+        bridge.download(self.path, "https://example.test/requests.py")
+        with open(self.path, "rb") as f:
+            self.assertEqual(b"# dependency body\n", f.read())
+
+    def test_http_source_follows_redirects(self):
+        requests_stub.scripted = [
+            _Response({"Location": "https://example.test/final.py"}),
+            _Response({}, 200, b"# final\n"),
+        ]
+        bridge.download(self.path, "https://example.test/requests.py")
+        with open(self.path, "rb") as f:
+            self.assertEqual(b"# final\n", f.read())
+
+    def test_non_http_source_writes_the_api_string_itself(self):
+        bridge.download(self.path, "print('inline')\n")
+        with open(self.path, "rb") as f:
+            self.assertEqual(b"print('inline')\n", f.read())
+
+    def test_error_status_raises_instead_of_writing_the_body(self):
+        # An HTML error page written to disk would surface later as a confusing
+        # SyntaxError from SourceFileLoader instead of the real download failure.
+        requests_stub.scripted = [_Response({}, 503, b"<html>busy</html>")]
+        with self.assertRaises(ValueError):
+            bridge.download(self.path, "https://example.test/requests.py")
+        self.assertFalse(os.path.exists(self.path))
+
+    def test_failed_download_keeps_a_previously_cached_file_intact(self):
+        with open(self.path, "wb") as f:
+            f.write(b"# cached copy\n")
+        requests_stub.scripted = [_Response({}, 500, b"<html>busy</html>")]
+        with self.assertRaises(ValueError):
+            bridge.download(self.path, "https://example.test/requests.py")
+        with open(self.path, "rb") as f:
+            self.assertEqual(b"# cached copy\n", f.read())
+
+    def test_successful_download_leaves_no_temp_files_behind(self):
+        requests_stub.scripted = [_Response({}, 200, b"# body\n")]
+        bridge.download(self.path, "https://example.test/requests.py")
+        self.assertEqual(["requests.py"], sorted(os.listdir(self.dir)))
+
+
+class ManualVideoCheckBridgeTest(unittest.TestCase):
+    """The two optional sniffer extensions default to false when unimplemented."""
+
+    def test_missing_implementations_are_false_not_attribute_error(self):
+        class Bare:
+            pass
+
+        self.assertFalse(bridge.manualVideoCheck(Bare()))
+        self.assertFalse(bridge.isVideoFormat(Bare(), "https://example.test/a.mp4"))
+
+    def test_present_implementations_are_delegated(self):
+        class Sniffer:
+            def manualVideoCheck(self):
+                return True
+
+            def isVideoFormat(self, url):
+                return url.endswith(".m3u8")
+
+        self.assertTrue(bridge.manualVideoCheck(Sniffer()))
+        self.assertTrue(bridge.isVideoFormat(Sniffer(), "https://example.test/a.m3u8"))
+        self.assertFalse(bridge.isVideoFormat(Sniffer(), "https://example.test/a.mp4"))
+
+
+class BridgeContractTest(unittest.TestCase):
+    """Every app.callAttr("<name>") in the Java bridge needs a matching app.py callable.
+
+    download() was removed from app.py while Spider.java kept calling it, so a spider
+    with a non-empty getDependence() failed at init and PyLoader silently degraded it to
+    an all-empty SpiderNull.  This test derives the expected names from the Java sources
+    themselves, so adding a callAttr() without the Python side fails here.
+    """
+
+    # Only the bridge's own "app" module is app.py; Platform/Loader also callAttr on
+    # java.android and webhtv_logging, which are different Python modules.
+    CALL_ATTR = re.compile(r'\bapp\.callAttr\("([A-Za-z_][A-Za-z0-9_]*)"')
+
+    def test_every_java_call_attr_exists_in_app_py(self):
+        java_root = SOURCE.parent / "java/com/fongmi/chaquo"
+        names = set()
+        for source in sorted(java_root.glob("*.java")):
+            names.update(self.CALL_ATTR.findall(source.read_text(encoding="utf-8")))
+        self.assertIn("download", names, "the Java bridge must still call download()")
+        self.assertIn("getDependence", names)
+        missing = sorted(n for n in names if not callable(getattr(bridge, n, None)))
+        self.assertEqual([], missing, "app.py has no callable for these callAttr names")
 
 
 if __name__ == "__main__":
