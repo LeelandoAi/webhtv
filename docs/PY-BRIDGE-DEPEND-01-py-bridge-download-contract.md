@@ -53,7 +53,7 @@ OK影视（FongMi 上游）的 `app.py` 仍保留 `download()`，所以同一脚
 理由：单个依赖取不到不应让整个站点降级成 `SpiderNull`（那正是用户看到的「加载不了」）。改为记日志继续初始化；真正需要该模块的源会在首次使用时抛 `ImportError`，比整站静默空列表更好定位。`finally` 保证 `PyObject` 仍被释放，与该类其它 `toStr/toBool` 的释放惯例一致。
 
 两点由第一轮评审修正：
-- `catch (Exception)` → `catch (Throwable)`，否则跨桥抛出的 `Error` 仍会逃逸成整站降级。
+- `catch (Exception)` → `catch (Throwable)`，否则调用路径上出现的 JVM 级 `Error`（`OutOfMemoryError`/`StackOverflowError`）仍会逃逸成整站降级。（Python 侧异常经 Chaquopy 桥到达 Java 时是 `PyException`，本身继承 `java.lang.RuntimeException`，原本就落在 `Exception` 内；这条改动的作用域是 JVM 错误，见 `## 评审记录` 第 2 轮的校正。）
 - 增加无条件的 `e.printStackTrace()`。`SpiderDebug.log()` 经 `DebugLogStore.acceptsTag()` 门控，而 `acceptsTag` 要求「调试日志」开关（`catvod/.../DebugLogStore.java:37-39`，默认关），只靠结构化日志会让「某个依赖被跳过」在默认配置下不可见——这与 `PyLoader.java:59-64` 已记录的理由相同。
 
 ### 3. `chaquo/src/test/python/test_app_bridge_contract.py`
@@ -103,7 +103,7 @@ OK
 
 ### 编译
 
-以下两条构建产物**早于第一轮评审修正**（`19s` / `2m 41s`），仅作历史记录；修复后的复跑结论见紧接其后的第三段。
+以下两条构建产物**早于第一轮评审修正**（`19s` / `2m 41s`），仅作历史记录，且**在本机复跑不可复现**（`19s` 在 gradle daemon 日志中零命中，`2m 41s` 仅以 `BUILD FAILED` 出现）；修复后的复跑结论见紧接其后的第三段。
 
 ```
 JAVA_HOME="C:/Program Files/Microsoft/jdk-21.0.12.8-hotspot" ./gradlew :chaquo:compileArm64_v8aDebugJavaWithJavac -PchaquopyBuildPython=G:/Python310/python.exe
@@ -115,7 +115,7 @@ BUILD SUCCESSFUL in 19s
 BUILD SUCCESSFUL in 2m 41s
 ```
 
-第二轮评审修正后的复跑（对应当前工作区，即本文件所记录的全部改动）：
+第二轮评审修正后的复跑（行为等价于本文件记录的最终改动：该次构建后仅再改过 `Spider.java` 的注释措辞与 `app.py` 的 `optionalBool` 抽取，`chaquo/build/python/sources/arm64_v8aDebug/app.py` 与最终 `app.py` 的 md5 相同、`javap` 反编译行为一致）：
 
 ```
 JAVA_HOME="/c/Program Files/Microsoft/jdk-21.0.12.8-hotspot" ./gradlew :chaquo:compileArm64_v8aDebugJavaWithJavac -PchaquopyBuildPython=G:/Python310/python.exe --console=plain
