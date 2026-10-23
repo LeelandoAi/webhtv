@@ -166,9 +166,39 @@
 
 `git status --porcelain` 为 6 个 `M` + 3 个 `??`（新增 `DroppedFrameAccounting.java`、`DroppedFrameAccountingTest.java`、本文件），`git diff --stat` = 6 files changed, 189 insertions(+), 15 deletions(-)（不含新增文件）。工作区无其它脏项（`Python/` 为既有未跟踪目录，已通过 `.git/info/exclude` 临时排除以便 guard 启动，收尾已还原，不进入提交）。
 
-### 5.4 未做的验证（如实记录）
+### 5.4 设备实测（2026-10-23，模拟器 127.0.0.1:5561）
 
-- **未做设备实测**：当前无硬解可用设备接入，无法在 X7 Ultra 上复跑 `G:\下载\webhtv-debug-log (30).txt` 对应的暂停场景。因此「OSD 掉帧数字不再随暂停跳动」「≥4/秒 才报掉帧较多」这两条用户可见行为**尚无设备证据**，只有逻辑与单测支撑。
+设备：OnePlus HD1910 / device=marlin / Android 9 (API 28) / x86_64+arm64-v8a / 1920×1080@60Hz；安装的是本提交构建（日志 `env.device` 行 `gitRevision=fd5bcf109ee4e5de5fbeaa7d31242806bc76b5e3`、`state=clean`、`buildTime=202610231141`、flavor=leanback、abi=arm64_v8a）。播放对象为本地 854×480 / 960×540 H.264 素材，解码器 `OMX.qcom.video.decoder.avc`（模拟器无硬解，仅验证记账口径与展示，不用于复跑 X7 Ultra 的 4K 场景）。
+
+**证据 1：新日志字段在真机生效，且暂停结算被正确标注。** 暂停瞬间（trace `p-8tmye-1`，12:44:14.214）：
+
+```
+playback-metrics: trace=p-8tmye-1 droppedFrames=1 total=1 elapsed=31118ms playTime=30640ms rate=0.03/s pauseSettled=true pauseSettledTotal=1 position=31077
+```
+
+- 旧格式只有 `droppedFrames/total/elapsed/position`；现在 `playTime`、`rate`、`pauseSettled`、`pauseSettledTotal` 全部出现。
+- `pauseSettled=true`：该上报确实是在 `isPlaying=false` 期间（renderer `onStopped`）结算的，与 §1.4 的上游机制一致。
+- `rate=0.03/s` = 1 帧 ÷ 30.64 播放秒，归一化正确；`playTime=30640ms` 与 `elapsed=31118ms` 接近但不等，说明两套时间基准（`onIsPlayingChanged` 打点 vs renderer `droppedFrameAccumulationStartTimeMs`）各自独立工作，未被混用。
+- 同一会话前 30 秒播放期间没有任何 `droppedFrames` 上报（累计 1 帧 < 50 阈值），只在暂停时结算一次——复现了 §1 的「暂停记账」形态。
+
+**证据 2：OSD 显示改为「掉帧 N（x.x/秒）」，且暂停后不再跳成突发。** 截图（1920×1080，`F:\temp\ev_after_pause.png` 与 `F:\temp\osd9_mkv.png`）中「播放」行原文：
+
+| 场景 | OSD「播放」行 | 结论行 |
+| --- | --- | --- |
+| 播放中（未暂停） | `就绪(READY) / 19.4 s / 87% / 重缓冲 0 次 / 掉帧 0（0.0/秒）` | 正常 |
+| 暂停后（本会话 0 帧结算） | `就绪(READY) / 18.7 s / 87% / 重缓冲 0 次 / 掉帧 0（0.0/秒）` | 正常 |
+| 暂停后（结算 1 帧，mkv 会话） | `就绪(READY) / 28.9 s / 100% / 重缓冲 0 次 / 掉帧 1（0.0/秒）` | 正常 |
+
+- 旧口径下这一行只会是 `掉帧 1`，用户无法判断它是「1 帧/30 秒」还是「突发掉帧」；现在同一数字带上了速率，且 `0.0/秒` 直接说明它不构成劣化。
+- 累计到 1 帧（远低于旧的 `>=60` 阈值、也低于新的 `>=4/秒` 阈值）时结论行仍为「正常」，**没有触发「掉帧较多，可能是解码或渲染压力」的误报**；这正是本次修复要消除的用户可见症状。
+
+**证据 3：暂停/恢复控制与状态机正常。** `GET /action?do=control&type=pause|play`（`app/src/main/java/com/fongmi/android/tv/server/process/Action.java:156-169`）均返回 200；日志里 `playing changed isPlaying=true state=3` → `isPlaying=false state=3` → `isPlaying=true state=3` 成对出现，暂停期间 state 保持 READY（3），与 E-SP12 假设的「暂停不改变播放状态、只 stop renderer」一致。
+
+**未覆盖**：模拟器无硬解、素材为 854×480/960×540 低码率，未复现原日志 4K H.264 High L5.2 的 ≈1.2 帧/播秒真实丢帧，因此「高码率下速率显示为 1.x/秒、≥4/秒 才报掉帧较多」的上限分支仍未在设备上验证；该分支由单测覆盖（§5.1）与代码常量保证。
+
+### 5.5 未做的验证（如实记录）
+
+- **未在 X7 Ultra 实机复跑** `G:\下载\webhtv-debug-log (30).txt` 对应的 4K 暂停场景（无硬解可用设备）。因此 §7 第 1 条的真实低速丢帧降幅未验证；本次只验证了记账口径与展示层。
 - 单测覆盖的是口径与阈值判定本身（`DroppedFrameAccounting` 的暂停结算分流、速率归一、除零、饱和累加；`ExoDecoderRuntimeSession` 的速率健康判定与回退），不覆盖 media3 的事件时序——后者已在 §1 用上游源码逐行确认。
 
 ---
