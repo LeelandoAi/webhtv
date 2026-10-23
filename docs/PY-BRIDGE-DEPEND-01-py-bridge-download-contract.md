@@ -4,10 +4,10 @@
 
 - 目标：修复「同一 py 源在 WebHTV 加载不了、在 OK影视 正常」的根因，并补齐同类桥接契约缺口。
 - 验收标准：`getDependence()` 非空（如夸父.py 返回 `["requests"]`）的 py 源能在 WebHTV 正常初始化；依赖取回失败不再把整站降级为 `SpiderNull`；Java `app.callAttr("<name>")` 与 app.py 属性有自动回归校验。
-- 车道 / 范围：`standard`；`chaquo/src/main/python/app.py`、`chaquo/src/main/java/com/fongmi/chaquo/Spider.java`、`chaquo/src/test/python/test_app_bridge_contract.py`、`docs/integration/extensions.md`、`docs/integration/spider.md`、本文件。
+- 车道 / 范围：`standard`；`chaquo/src/main/python/app.py`、`chaquo/src/main/java/com/fongmi/chaquo/Spider.java`、`chaquo/src/test/python/test_app_bridge_contract.py`、`app/src/test/java/com/fongmi/android/tv/api/loader/PythonSpiderDiagnosticsWiringTest.java`、`docs/integration/extensions.md`、`docs/integration/spider.md`、本文件。
 - 分支 / 基线：`dev4` @ `0bccba71c5f86818c99a44114d3f0d58e7989481`。
-- 状态：三轮评审完成，全部必修与文档/去重意见均已落地并复验（49 项单测通过），随本次提交一起入库。证据版本归属见下方「验证」小节：单测与 `:chaquo:compileArm64_v8aDebugJavaWithJavac`（27s）为修复后复跑；模拟器端到端为修复前产物，本次修复只动 `catch` 子句、状态阈值、一处分支与注释，不改变其覆盖的行为。
-- 下一步：`task_guard.sh finish` 提交 → 推送 `dev4` → 开 PR 到 `beta`。
+- 状态：五轮双轴评审完成（第 1–3 轮修代码与文档，第 4 轮补 Java 侧守卫，第 5 轮只读对抗复核），全部必修与文档/去重意见均已落地并复验。已入库两笔：`8ef4dbf34fd`（代码/测试，+188/-36）、`762f5ae6ae8`（本文档措辞收紧）；第 4 轮补的 `PythonSpiderDiagnosticsWiringTest.java` 与本文件待随本轮提交（第 5 轮已把该测试的块注释剥除在「未闭合」分支改为保留余下文本，并修正本文档两处与代码/工具输出不符的陈述）。证据版本归属见下方「验证」小节：49 项 Python 单测与 `:chaquo:compileArm64_v8aDebugJavaWithJavac`（27s）为修复后复跑；模拟器端到端为修复前产物，本次修复只动 `catch` 子句、状态阈值、一处分支与注释，不改变其覆盖的行为。
+- 下一步：提交本轮守卫（`app/src/test/java/com/fongmi/android/tv/api/loader/PythonSpiderDiagnosticsWiringTest.java` + 本文件）→ 等 PR #486 合入 `beta`（`dev4` 已推送、PR 已开）。该守卫是第 4 轮为「日志双通道」补的锁——问题由第 3 轮提出，锁在第 4 轮补上；第 5 轮两条只读复审均给出「可以放行」。
 
 ## 现象与根因
 
@@ -62,10 +62,17 @@ OK影视（FongMi 上游）的 `app.py` 仍保留 `download()`，所以同一脚
 - 新增 `DownloadTest`：http 写正文、跟随跳转、非 http 写字符串、4xx 抛错且不创建目标、5xx 抛错、跳转链走不下去的 3xx 抛错、带 scheme 的非 http 源抛错、下载失败保留旧缓存、成功后目录里不残留临时文件。
 - 新增 `ManualVideoCheckBridgeTest`：缺失实现返回 `False` 而不是 `AttributeError`；有实现时正确委派。
 - 新增 `BridgeContractTest`：用正则 `\bapp\.callAttr\("([A-Za-z_][A-Za-z0-9_]*)"` 从 `chaquo/src/main/java/com/fongmi/chaquo/*.java` 提取全部桥接调用名，断言 app.py 每个名字都有可调用属性。正则限定 `app.` 前缀，避免误收 `Platform.java` 对 `java.android` 和 `Loader.java` 对 `webhtv_logging` 的 `callAttr`（它们是不同的 Python 模块）。
-  - `REQUIRED` 只收录 `chaquo/.../Spider.java` 私有 `app` 句柄上的 18 个调用名，**不含** `spider`：后者出自 `chaquo/src/main/java/com/fongmi/chaquo/Loader.java:35` 的 `app.callAttr("spider", ...)`，是加载器建站入口而非 `Spider` 实例的桥接调用，且已被 `test_bridge_helpers_are_importable_by_remote_scripts` 以可导入性单独覆盖。
+  - `REQUIRED` 只收录 `chaquo/.../Spider.java` 私有 `app` 句柄上的 18 个不同调用名（共 19 处，`searchContent` 出现两次），**不含** `spider`：后者出自 `chaquo/src/main/java/com/fongmi/chaquo/Loader.java:35` 的 `app.callAttr("spider", ...)`，是加载器建站入口而非 `Spider` 实例的桥接调用，且已被 `test_bridge_helpers_are_importable_by_remote_scripts` 以可导入性单独覆盖。
   - 已知限制（第二轮评审记录、暂不修改）：正则只校名字存在性、不校 `callAttr` 的参数个数（arity-blind）；补齐需解析 Java 实参个数并维护签名表，收益低于维护成本。
   - 第一轮评审修正：原实现「期望集合」完全由 Java 源码推导。那样一旦没人再调用某个名字（或桥接源码被搬走），集合本身会一起缩小甚至变空，本测试要防的回归反而测不出来。现改为显式契约集合 `REQUIRED`（含 `download`）——`test_every_java_call_attr_exists_in_app_py` 校验「Java 调用的都在 app.py 里」，`test_the_bridge_still_calls_every_contracted_name` 校验「契约里的名字 Java 都还在调」，并断言确实找到了 Java 源文件。
 - 扩展 `test_bridge_helpers_are_importable_by_remote_scripts`，纳入 `download/manualVideoCheck/isVideoFormat`。
+
+### 3b. `app/src/test/java/com/fongmi/android/tv/api/loader/PythonSpiderDiagnosticsWiringTest.java`（第 4 轮新增）
+
+- 守 `Spider.java` 的「依赖取回失败」日志双通道：`SpiderDebug.log(TAG, "depend download failed name=%s error=%s", item, e)` 与紧随其后的无条件 `e.printStackTrace()` 各存在、**相距 < 200 字符（同一代码块）**，且 `printStackTrace` 在该文件中唯一（其余 `catch` 只吞不打印）。
+- 守 `catch (Throwable)`：`download(item + ".py")` 之后必须跟 `catch (Throwable e)`，且两者距离 < 200 字符；改回 `catch (Exception)` 会让 JVM 级 `Error` 重新逃逸成整站降级。
+- 取源路径沿用本仓库既有的跨模块读源码惯例（`Files.exists(Path.of("chaquo")) ? Path.of("") : Path.of("..")`，与 `ChaquopyRequirementsTest:29` 的 `Files.exists(Path.of("chaquo"))` 写法一致；`FlagSwitchPlaybackWiringTest:146` 是同一「根目录探测」思路的另一种探测目标，不是同一字符串），并沿用 `PyLoaderDiagnosticsWiringTest#code` 的「剥注释行」手法，避免 `// e.printStackTrace();` 这种注释让断言恒真。
+- 存在理由：该修复位于 `chaquo` 模块，`app/src/test` 此前没有任何 Java 测试读 `chaquo/src/main/java`；没有守卫时，变异实测「`catch (Throwable)`→`catch (Exception)`」与「删掉 `e.printStackTrace()`」都能 `Ran 49 tests OK` 静默通过。
 
 ### 4. 文档
 
@@ -123,6 +130,18 @@ BUILD SUCCESSFUL in 27s
 19 actionable tasks: 3 executed, 16 up-to-date
 ```
 
+### Java 单元测试（第 4 轮补的日志通道守卫）
+
+```
+JAVA_HOME="/c/Program Files/Microsoft/jdk-21.0.12.8-hotspot" ./gradlew :app:testMobileArm64_v8aDebugUnitTest \
+  --tests 'com.fongmi.android.tv.api.loader.PythonSpiderDiagnosticsWiringTest' \
+  -PchaquopyBuildPython=G:/Python310/python.exe --console=plain
+BUILD SUCCESSFUL in 1m 32s
+99 actionable tasks: 17 executed, 82 up-to-date
+```
+
+补上「两条通道同属一个 `catch`」的邻近性断言后，同一命令复跑为 `BUILD SUCCESSFUL in 37s`（`99 actionable tasks: 8 executed, 1 from cache, 90 up-to-date`）；再补上块注释剥除后为 `BUILD SUCCESSFUL in 33s`。三次运行的结论一致：2 个用例全绿。本机增量缓存偶发 `Could not get file mode for ...HlsPlaylistRewriter$Result.class`（评审侧另一次运行遇到过），属环境问题、与用例无关。
+
 ### 真机端到端（模拟器 HD1910，Android 9 / SDK 28）
 
 安装修复后的 `app-mobile-arm64_v8a-debug.apk` 后，用 App 自带的本地服务（`adb forward tcp:19978 tcp:9978`）驱动，全程不需要点 UI：
@@ -171,7 +190,7 @@ Standards 轴与 Spec 轴并行评审 `35516a58ffc`，结论：6 个文件与改
 
 ### 第 2 轮（双轴复审，对象＝第一轮修复后的工作区）
 
-Standards 轴独立复核后确认：3 项必修均已生效，`>= 300` 不影响 200/204 与正常跳转路径；并从 Java 源码实测 19 个 `app.callAttr` 名全部被正则覆盖、`Platform.java:92` 与 `Loader.java:25` 未误收，无漏检无误检。Spec 轴同时确认 45→49 与真实运行一致。
+Standards 轴独立复核后确认：3 项必修均已生效，`>= 300` 不影响 200/204 与正常跳转路径；并从 Java 源码实测 19 处 `app.callAttr` 调用（18 个不同名字，`searchContent` 出现两次）全部被正则覆盖、`Platform.java:92` 与 `Loader.java:25` 未误收，无漏检无误检。Spec 轴同时确认 45→49 与真实运行一致。
 
 据此再落三处（本轮新增）：
 
@@ -195,7 +214,38 @@ Standards 轴独立复核后确认：3 项必修均已生效，`>= 300` 不影�
 
 另外修正一处**文档陈述与代码不符**（Standards 轴迟到意见命中）：第 2 轮正文曾写「`'://' in api` 不会误伤内联源码」，这不成立——内联源码里若字面量出现 `https://`，同样会抛 `ValueError`。该句已删除，只保留经实测的 `>= 300` 与 19 个 `callAttr` 名覆盖结论。
 
+### 第 4 轮（Standards 轴补锁，对象＝已提交的 `8ef4dbf34fd` + `762f5ae6ae8`）
+
+Standards 轴本轮结论为「仍需修改」两项，均为补锁/收尾级，代码逻辑本身无规范违反：
+
+1. **日志双通道无测试守卫，可静默回退**（必修）。`Spider.java:49-55` 虽已齐备 `catch (Throwable)` + 结构化日志 + 无条件 `printStackTrace`，但变异实测「`catch (Throwable)`→`catch (Exception)`」与「删掉 `e.printStackTrace();`」都仍是 `Ran 49 tests OK`。仓库对同为加载器的 `PyLoader`/`JsLoader` 有 `PyLoaderDiagnosticsWiringTest` 专门守口径，而 `app/src/test` 下没有任何 Java 测试读 `chaquo/src/main/java`。→ 新增 `app/src/test/java/com/fongmi/android/tv/api/loader/PythonSpiderDiagnosticsWiringTest.java`（见上文 3b）。
+   - 补锁后变异实测：`catch (Throwable)`→`catch (Exception)` → `dependencyFailureKeepsTheBridgeCallGuarded` `FAILED`（`2 tests completed, 1 failed`、`BUILD FAILED in 36s`）；删掉 `e.printStackTrace();` → `dependencyFailureKeepsAnUnconditionalLogcatChannel` `FAILED`（`2 tests completed, 1 failed`、`BUILD FAILED in 35s`）。两次变异后均按 md5 `d05b8d3dc585f6cf263960dc9efe498b` 原样还原。
+2. **Recovery anchor 悬空**（必修）。原 `:10` 仍写「下一步 `task_guard.sh finish` 提交 → 推送 → 开 PR」，而提交已完成两笔。→ 已改为记录 `8ef4dbf34fd`（代码/测试）与 `762f5ae6ae8`（文档）两笔入库，以及 PR #486 已开待合入。
+
+判为「暂不修改」：`Spider.java:50` 未像 `PyLoader.java:58`/`JsLoader.java:51` 那样再补一条 `SpiderDebug.log(TAG, e)`，后果仅是堆栈本身不进「调试日志」诊断库（Logcat 仍有完整堆栈），属有意识偏差；`Spider.java:48` 的 `download(item + ".py")` 调用点与紧随其后的 `catch (Throwable e)` 正是 `PythonSpiderDiagnosticsWiringTest#dependencyFailureKeepsTheBridgeCallGuarded` 锚住的位置（存在性 + 相距 42 字符 < 200）；反过来，`download()` 内 `Spider.java:181` 的 `app.callAttr("download", path, url)` 在本 Java 测试里没有任何断言，只被 Python 侧 `test_app_bridge_contract.py` 的名字正则按名字覆盖。
+
 判为「不修改」的遗留项（均已在上文记录理由）：`api.startswith('http')` 大小写敏感（沿用既有写法，`HTTP://` 会落到 scheme 分支并报「不是 http(s)」）、`>= 300` 也会挡 304（无条件的 GET 不会产生 304）、`catch (Throwable)` 会吞 `OutOfMemoryError` 后继续 init（与 `PyLoader` 及本类既有风格一致）、契约正则 arity-blind。
+
+#### 第 4 轮复审（Spec 轴）追加两项，均已在同一轮内改完
+
+- 文档：`:10` 的「下一步」原先仍以两件已完成的事开头（推送 `dev4`、开 PR），已改为「提交本轮守卫 → 等 PR #486 合入 `beta`」；轮次表述统一为「问题由第 3 轮提出、守卫在第 4 轮补上」，`:70` 的标题也由「第三轮新增」改为「第 4 轮新增」。
+- 测试（其一）：原 `PythonSpiderDiagnosticsWiringTest` 的 in-order + 唯一性断言不能证明两条通道同属一个 `catch`——把 `e.printStackTrace();` 挪到 `Spider.java:165` `getHeader()` 的 `catch (Exception e)`（`e` 在作用域内）后两个用例仍全 PASS（假绿空洞）。已补邻近性断言 `assertTrue(unconditional - diagnose < 200)`，并把注释降级为「两处语句都在、且全文仅此一处」的准确表述。
+- 补该断言后重跑变异（把 `printStackTrace` 从依赖 `catch` 挪进 `getHeader` 的 `catch`）→ `dependencyFailureKeepsAnUnconditionalLogcatChannel` `FAILED`、`2 tests completed, 1 failed`、`BUILD FAILED in 36s`；还原后 `BUILD SUCCESSFUL in 37s`（md5 回到 `d05b8d3dc585f6cf263960dc9efe498b`）。Standards 轴独立复算同一变异，得到相同结论（同一用例 `FAILED`；另测「挪进 `destroy()` 的 catch」同样 `FAILED`）。失败断言即本文件 `:79` 的邻近性检查——删除 `e.printStackTrace();` 这一类变异才会落在 `:74` 的 in-order 检查上。该轴实测两条 200 上限的实际距离为 94 与 42，均有余量。
+- 测试（其二）：`code()` 原先只剥以 `//` 或 `*` 开头的行，把 `e.printStackTrace();` 写成同一行的 `/* e.printStackTrace(); */` 就能让三条断言全部静默通过（Standards 轴实测 `BUILD SUCCESSFUL`）。该漏洞与同目录的 `PyLoaderDiagnosticsWiringTest:33-39` 同源、非本轮引入，但既然本次已补锁，就一并收严：`code()` 先按 `/* … */` 剥块注释、再逐行剥 `//` 注释。收严后同一变异 → `dependencyFailureKeepsAnUnconditionalLogcatChannel` `FAILED`、`2 tests completed, 1 failed`、`BUILD FAILED in 36s`；还原后 `BUILD SUCCESSFUL in 33s`。
+
+### 第 5 轮（只读复核，对象＝第 4 轮修复后的工作区）
+
+两条独立只读复审（均被要求「不写文件、不跑 gradle、不做变异」），结论均为「可以放行」：
+
+- **对抗性核验**：该审查者用内存等价实现重算了本测试的 Java 语义，复现出文档记录的两个距离（94 / 42）与四次已记录变异（`catch (Throwable)`→`catch (Exception)` 失败、删 `e.printStackTrace();` 失败、挪进 `getHeader()` 的 `catch` 失败、行内块注释仅在收严后的剥除逻辑下失败）；并把 `Spider.java` 还原成「`download(item + ".py"); close(item);` 无 try/catch」这一**真实回归形态**，两个用例都失败——守卫确实咬得住它声称防的回归。
+- 该审查者还核对了三条可伪证主张，全部属实：`Spider.java` md5 与本文件记录一致；`chaquo/build/python/sources/arm64_v8aDebug/app.py` 与源 `app.py` 的 md5 相同（`3ae26c8ea2387561bde98ff5dcebe7e3`）；`DebugLogStore.java:37-39` / `PyLoader.java:58` / `JsLoader.java:51` 三处引用行号逐一命中。同时确认 `git log --branches --not --remotes` 为空（不存在「已提交未推送」的漏评内容），改动集 7 条路径全部被本文档覆盖。
+
+据此再落两处：
+
+1. **文档陈述与代码相反**（必修，一句）。原文写「`Spider.java:48` 的调用点正文本身无守卫，被守住的是 `download()` 内的 `app.callAttr`」——两半都反了：本测试锚的正是 `:48` 这个调用点（存在性 + 42 字符邻近），而 `download()` 内 `:181` 的 `app.callAttr` 在 Java 侧没有任何断言。已改为准确表述，并同步去掉「19 个 callAttr 名」的歧义（实为 19 处调用 / 18 个不同名字）。
+2. **`code()` 未闭合块注释分支**。原实现 `if (close < 0) break;` 会丢掉余下全部文本——方向是 fail-closed（响亮失败），不会造成假绿，但会以「看不到代码」的方式不明不白地红掉。已改为先把余下文本并入 `plain` 再 `break`。
+
+判为「暂不修改」：行尾注释同源漏洞（`int guard = 0; // e.printStackTrace();` 仍可通过），与既有 `PyLoaderDiagnosticsWiringTest:33-39` 同级、非本轮引入；改 `catch` 变量名或把日志调用折行会造成假红，属已记录的文本断言脆弱性；`FlagSwitchPlaybackWiringTest:146` 与本测试的根目录探测写法不同（已收紧表述）。
 
 ## 回滚
 
