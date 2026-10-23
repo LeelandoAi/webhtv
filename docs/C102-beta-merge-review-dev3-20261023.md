@@ -191,10 +191,19 @@ DSH bash 工具无法写入 `.git`（`FETCH_HEAD`/索引写入报 Permission den
 
 | 项 | 值 |
 | --- | --- |
-| 合并提交 | 由任务守卫 `finish` 在本会话内创建（`.git/MERGE_HEAD` = `d9da14dcb77e84d4beb158e83efa74124a1116f7`，父提交 `7067d62b7b` + `d9da14dcb7`），30 路径 / +1036 −27；本轮与 C101 的差别是一次提交内同时完成合并、F1 修复与评审文档 |
-| 评审提交 | 同上（守卫 `C102-beta-merge-review-dev3-20261023` 的 `finish` 创建，含合并结果 + F1 修复的 2 个路径 + 本评审文档） |
-| Recovery tag | `recovery/C102-beta-merge-review-dev3-20261023/<stamp>-<commit12>`（`finish` 创建） |
-| 推送 | `git push origin dev3`（如需单独推送 recovery tag：`git push origin <tag>`） |
-| PR | **新建** dev3 → beta（本轮开始时 dev3 无开放 PR，历史 dev3→beta PR #482/#480/#477/#475… 均已合并；同 head/base 无法再建第二个）：中文标题与描述，描述含具体改动内容 = 「合并 `origin/beta` `d9da14dcb7`（11 提交，PR #484 线路：第 17 槽播放菜单遮盖层主题、E-SP12 掉帧归一、C101 评审记录）+ 评审并修复未推送提交 `7067d62b7b` 的焦点/选中线索合并缺陷（F1）」 |
-| 拉取 | `git fetch origin --prune --tags` + `git pull --ff-only origin dev3` |
+| 合并提交 | `db553538b2896a0177ee6c2f6d0f138b9ccf7666`（合并提交，父提交 `7067d62b7b` + `d9da14dcb77e84d4beb158e83efa74124a1116f7`；`git rev-list --parents` 3 token 确认双亲），33 路径 / +1373 −38（其中合并面 30 路径 / +1036 −27，F1 修复 + 评审文档 3 路径）；由守卫 `finish` 在本会话内一次提交完成合并、F1 修复与评审文档（这是与 C101 的差别） |
+| 评审提交 | 同上 `db553538b2896a0177ee6c2f6d0f138b9ccf7666`（含合并结果 + F1 修复 2 路径 + 本评审文档 1 路径） |
+| Recovery tag | `recovery/C102-beta-merge-review-dev3-20261023/20261023182242-db553538b289`（`finish` 创建并已单独推送） |
+| 推送 | `git push origin dev3`（`3b02e02c07..db553538b2`，PUSH_EXIT=0）；recovery tag 单独 `git push origin <tag>`（`[new tag]`，TAGPUSH_EXIT=0） |
+| PR | **新建** [PR #485](https://github.com/Silent1566/webhtv/pull/485) dev3 → beta（本轮开始时 dev3 无开放 PR，历史 dev3→beta PR #482/#480/#477/#475… 均已合并；同 head/base 无法再建第二个）：中文标题与描述，描述含具体改动内容 = 「合并 `origin/beta` `d9da14dcb7`（11 提交，PR #484 线路：第 17 槽播放菜单遮盖层主题、E-SP12 掉帧归一、C101 评审记录）+ 评审并修复未推送提交 `7067d62b7b` 的焦点/选中线索合并缺陷（F1）」；**只创建，不合并** |
+| 拉取 | `git fetch origin --prune --tags` + `git pull --ff-only origin dev3`（`Already up to date`，见 §9） |
 | 交付时工作树 | 跟踪文件干净（仅剩受保护既有脏路径 `%SystemDrive%/`、`.design-evidence/` 保持不动、不入库） |
+
+## 9. 拉取与文档收尾提交
+
+| 项 | 值 |
+| --- | --- |
+| 拉取命令 | `git fetch origin --prune --tags`（FETCH_EXIT=0，新增 3 个历史 recovery tag）+ `git pull --ff-only origin dev3`（PULL_EXIT=0，`Already up to date.`） |
+| 拉取后状态 | `git rev-list --left-right --count origin/dev3...HEAD` = `0 0`（本地与远端 dev3 完全一致）；HEAD 仍为 `db553538b2896a0177ee6c2f6d0f138b9ccf7666`；`origin/beta` 仍为 `d9da14dcb7`（本轮拉取时 beta 未前进） |
+| 文档收尾提交 | 上面这一节把 §8 的占位符换成实测坐标，属于**提交后才获得的交付 ID 的纯文档回填**，按 AGENTS.md §6「不可避免的 post-commit ID/tag 只能再做一个仅文档的收尾提交」处理：一次仅文档提交（不触发任何构建/测试/研究），随后推送。评审对象与已验证代码在 `db553538b2` 中已冻结不变 |
+| 收尾提交的坐标 | 见本提交自身的 `git log -1`（提交信息 `docs(C102): 回填交付坐标（提交 db553538b2 / tag / PR #485）与拉取结果`） |
