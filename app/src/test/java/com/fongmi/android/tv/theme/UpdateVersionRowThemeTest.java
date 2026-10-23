@@ -86,6 +86,61 @@ public class UpdateVersionRowThemeTest {
     }
 
     /**
+     * The static selector separated "focused" from "selected" by swapping the fill and ring
+     * roles ({@code colorPrimary} vs {@code colorPrimaryContainer}). The runtime renderer has
+     * to keep that: the TV dialog always opens with {@code stableItem.requestFocus()}, so a
+     * focus fill of {@code colorPrimaryContainer} would make the focused card look like the
+     * expanded one and collapse the two clues into one.
+     */
+    @Test
+    public void theFocusedCardStaysDistinguishableFromTheSelectedCard() {
+        for (ThemeTokens tokens : new ThemeTokens[]{ThemeTokens.dark(), ThemeTokens.light()}) {
+            String where = tokens == ThemeTokens.dark() ? "dark" : "light";
+            int focused = UpdateVersionRowTheme.focusFill(tokens);
+            int selected = UpdateVersionRowTheme.fill(tokens, true);
+            int resting = UpdateVersionRowTheme.fill(tokens, false);
+            assertNotEquals(where + ": focus must not paint the selected fill", focused, selected);
+            assertTrue(where + ": the focus fill has to clear the non-text floor against the selected fill",
+                    ThemeContrast.ratio(focused, selected) >= 3.0);
+            assertTrue(where + ": the focus fill has to differ from the resting fill", ThemeContrast.ratio(focused, resting) >= 3.0);
+            assertTrue(where + ": focus ink on the focus fill",
+                    ThemeContrast.ratio(UpdateVersionRowTheme.focusInk(tokens), focused) >= 4.5);
+            // The selected card keeps the resting ink while it is not focused, so the
+            // selected fill still has to carry it.
+            assertTrue(where + ": resting ink on the selected fill",
+                    ThemeContrast.ratio(UpdateVersionRowTheme.nameColor(tokens, true), selected) >= 4.5);
+        }
+    }
+
+    /**
+     * The contract test in the leanback source set reads
+     * {@code selector_update_version_item.xml}, which this dialog no longer renders: the
+     * helper overrides {@code row.setBackground(...)}. Pin the runtime side here so focus and
+     * selected cannot silently collapse again while that test stays green.
+     */
+    @Test
+    public void theCardFaceKeepsItsStatesAndTheSharedRingWidth() throws Exception {
+        String source = codeOnly(read("src/main/java/com/fongmi/android/tv/theme/UpdateVersionRowTheme.java"));
+        for (String state : new String[]{"android.R.attr.state_focused", "android.R.attr.state_pressed", "android.R.attr.state_selected"}) {
+            assertTrue("the card face must declare " + state, source.contains(state));
+        }
+        assertTrue("the focused face must paint the primary fill", source.contains("faced(context, safe.colorPrimary(),"));
+        assertTrue("the selected face must paint the primary container fill", source.contains("faced(context, safe.colorPrimaryContainer(),"));
+        assertTrue("the ring width must come from the shared dimens token", source.contains("R.dimen.webhtv_focus_ring_width"));
+        assertTrue("the card text must flip on focus", source.contains("setTextColor(textColors("));
+        assertTrue("focused and pressed must be matched before the default entry",
+                source.contains("new int[][]{new int[]{android.R.attr.state_focused}, new int[]{android.R.attr.state_pressed}, new int[]{}}"));
+        // The state list only reaches the text because the card nodes propagate the row
+        // state; without these declarations the focused branch would never be selected.
+        for (String flavour : new String[]{"mobile", "leanback"}) {
+            String layout = read("src/" + flavour + "/res/layout/dialog_update.xml");
+            int declarations = layout.split("duplicateParentState", -1).length - 1;
+            assertTrue(flavour + ": every card text node must propagate the row focus state", declarations >= 8);
+        }
+        assertFalse("the ring width must not be a per-widget literal", source.contains(", 2, CORNER_DP)"));
+    }
+
+    /**
      * Pins the reported defect numerically. The user screenshot measured a
      * {@code #0F1D26} card carrying {@code #49454F} text; a fix that still allowed that
      * pair would pass every other assertion here.

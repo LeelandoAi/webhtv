@@ -1,11 +1,14 @@
 package com.fongmi.android.tv.theme;
 
 import android.content.Context;
+import android.content.res.ColorStateList;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.StateListDrawable;
 import android.view.View;
 import android.widget.TextView;
+
+import com.fongmi.android.tv.R;
 
 /**
  * Row rendering for the version cards inside the “版本更新” dialog.
@@ -35,6 +38,16 @@ import android.widget.TextView;
  * {@link ThemeController#current()} snapshot. {@code ?attr/color*} cannot do that: it is
  * a compile-time resource, Android exposes no public API to rewrite it at runtime, and
  * the whole point of the profile feature is that a user override must reach this dialog.
+ *
+ * <p>The card keeps the three states the static selector defined, with the same role swap
+ * between them: resting ({@code colorSurfaceContainerHighest} fill), the expanded/selected
+ * channel ({@code colorPrimaryContainer} fill) and focus ({@code colorPrimary} fill). The
+ * selector deliberately inverted fill and ring between "focused" and "selected" so that
+ * "where the focus is" and "which channel is open" stay two independent clues, and it used
+ * a closed ring for both. Collapsing the focus fill into {@code colorPrimaryContainer}
+ * would leave the TV dialog - which always opens with {@code stableItem.requestFocus()} -
+ * showing a focused card that looks selected; the ring width therefore comes from the
+ * single {@code @dimen/webhtv_focus_ring_width} token, not from a literal.
  *
  * <p>Every foreground is additionally re-checked with
  * {@link ThemeEditorUi#readable(int, int)} against the fills it can actually land on, so
@@ -109,6 +122,40 @@ public final class UpdateVersionRowTheme {
     }
 
     /**
+     * The fill the card paints while it holds focus: {@code colorPrimary}, i.e. the role the
+     * static selector used for {@code state_focused} and deliberately swapped with the
+     * selected fill so the two cues stay independent.
+     */
+    public static int focusFill(ThemeTokens tokens) {
+        return safe(tokens).colorPrimary();
+    }
+
+    /**
+     * The ink for the focused card. {@code colorOnPrimary} is already contracted against
+     * {@code colorPrimary}, so on a shipped palette this is the exact colour the old
+     * {@code update_version_item_*} state lists used; the fallback only fires for a user
+     * palette that breaks that pair.
+     */
+    public static int focusInk(ThemeTokens tokens) {
+        ThemeTokens safe = safe(tokens);
+        return readableOn(safe.colorOnPrimary(), safe.colorPrimary());
+    }
+
+    /**
+     * One text role as a state list: focused and pressed take the on-focus ink, everything
+     * else the colour clamped against the resting and expanded fills.
+     *
+     * <p>The card's text views declare {@code android:duplicateParentState="true"} in both
+     * layouts; that is what lets the row's focus state reach them, and without it the
+     * focused branch would never be selected.
+     */
+    static ColorStateList textColors(int resting, int focused) {
+        return new ColorStateList(
+                new int[][]{new int[]{android.R.attr.state_focused}, new int[]{android.R.attr.state_pressed}, new int[]{}},
+                new int[]{focused, focused, resting});
+    }
+
+    /**
      * Applies the palette to one version card.
      *
      * <p>The text colours are checked against both the resting and the expanded fill
@@ -125,10 +172,11 @@ public final class UpdateVersionRowTheme {
             row.setTag(IGNORE_TAG);
             row.setBackground(background(row.getContext(), safe));
         }
-        if (name != null) name.setTextColor(readableOn(safe.colorOnSurface(), resting, expandedFill));
-        if (version != null) version.setTextColor(readableOn(safe.colorOnSurfaceVariant(), resting, expandedFill));
-        if (desc != null) desc.setTextColor(readableOn(safe.colorOnSurface(), resting, expandedFill));
-        if (expand != null) expand.setTextColor(readableOn(safe.colorPrimary(), resting, expandedFill));
+        int focusedInk = focusInk(safe);
+        if (name != null) name.setTextColor(textColors(readableOn(safe.colorOnSurface(), resting, expandedFill), focusedInk));
+        if (version != null) version.setTextColor(textColors(readableOn(safe.colorOnSurfaceVariant(), resting, expandedFill), focusedInk));
+        if (desc != null) desc.setTextColor(textColors(readableOn(safe.colorOnSurface(), resting, expandedFill), focusedInk));
+        if (expand != null) expand.setTextColor(textColors(readableOn(safe.colorPrimary(), resting, expandedFill), focusedInk));
         if (status != null) {
             status.setTextColor(pillTextColor(safe));
             status.setBackground(pill(status.getContext(), pillFill(safe)));
@@ -138,23 +186,46 @@ public final class UpdateVersionRowTheme {
     /**
      * The card background for the current palette.
      *
-     * <p>Focus keeps the {@code colorPrimaryContainer} fill with a thicker
-     * {@code colorPrimary} ring, exactly like {@link AppearanceRowTheme}: a primary fill
-     * would put the card's own text at 1.3-2.4:1 on the shipped palettes, and the text is
-     * deliberately not restyled on focus.
+     * <p>This is the runtime twin of {@code selector_update_version_item}: focus paints the
+     * {@code colorPrimary} fill with an on-primary ring, the selected channel paints
+     * {@code colorPrimaryContainer} with a primary ring, and the resting card keeps the
+     * quiet hairline. Focus is the only state whose text flips (see
+     * {@link #textColors(int, int)}), which is what makes a primary focus fill readable
+     * again.
      */
     public static Drawable background(Context context, ThemeTokens tokens) {
         ThemeTokens safe = safe(tokens);
         StateListDrawable states = new StateListDrawable();
         states.addState(new int[]{android.R.attr.state_focused},
-                ThemeEditorUi.shape(context, safe.colorPrimaryContainer(), safe.colorPrimary(), 2, CORNER_DP));
+                faced(context, safe.colorPrimary(), ringColor(safe.colorOnPrimary(), safe.colorPrimary())));
         states.addState(new int[]{android.R.attr.state_pressed},
-                ThemeEditorUi.shape(context, safe.colorPrimaryContainer(), safe.colorPrimary(), 2, CORNER_DP));
+                faced(context, safe.colorPrimary(), ringColor(safe.colorOnPrimary(), safe.colorPrimary())));
         states.addState(new int[]{android.R.attr.state_selected},
-                ThemeEditorUi.shape(context, safe.colorPrimaryContainer(), safe.colorPrimary(), 1, CORNER_DP));
+                faced(context, safe.colorPrimaryContainer(), ringColor(safe.colorPrimary(), safe.colorPrimaryContainer())));
         states.addState(new int[]{},
                 ThemeEditorUi.shape(context, safe.colorSurfaceContainerHighest(), safe.colorOutlineVariant(), 1, CORNER_DP));
         return states;
+    }
+
+    /**
+     * A card face with the shared focus-ring width. {@link ThemeEditorUi#shape} skips its own
+     * stroke when the width is 0, so the width is set here from the single repository token
+     * instead of a per-widget literal.
+     */
+    private static GradientDrawable faced(Context context, int fill, int stroke) {
+        GradientDrawable shape = ThemeEditorUi.shape(context, fill, stroke, 0, CORNER_DP);
+        shape.setStroke(focusRingWidth(context), stroke);
+        return shape;
+    }
+
+    /** The single focus-ring width source, {@code app/src/main/res/values/webhtv_dimens.xml}. */
+    private static int focusRingWidth(Context context) {
+        return Math.max(1, Math.round(context.getResources().getDimension(R.dimen.webhtv_focus_ring_width)));
+    }
+
+    /** The ring role when it clears the non-text floor against its own fill, else a readable fallback. */
+    private static int ringColor(int preferred, int fill) {
+        return ThemeContrast.ratio(preferred, fill) >= RING ? preferred : readableOn(preferred, fill);
     }
 
     private static GradientDrawable pill(Context context, int fill) {
