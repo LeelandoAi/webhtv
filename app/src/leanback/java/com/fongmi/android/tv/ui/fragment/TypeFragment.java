@@ -288,11 +288,13 @@ public class TypeFragment extends BaseFragment implements CustomScroller.Callbac
             }
         }
         mExtends.clear();
-        if (filterVisible) {
-            hideFilter();
-            showFilter();
-        }
         if (changed) {
+            // Rebuilding the rows is what makes the chips render as unselected; skip it when
+            // nothing was selected so a no-op long press does not scroll the panel back to row 0.
+            if (filterVisible) {
+                hideFilter();
+                showFilter();
+            }
             onRefresh();
             Notify.show(R.string.filter_reset);
         }

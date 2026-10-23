@@ -21,12 +21,17 @@
 ## 方案
 
 - `CustomTypeView` 内置长按计时（`LONG_PRESS_MS = 550`，沿用 `HomeActivity.CONFIRM_LONG_PRESS_MS` 的既有手感基准）：
-  - ACTION_DOWN(repeatCount==0 且未触发) → `postDelayed(longPressRunnable, LONG_PRESS_MS)`；
+  - ACTION_DOWN(repeatCount==0) → 先复位 `longPressFired` 再 `App.post(longPressRunnable, LONG_PRESS_MS)`。
+    复位是必须的：若上一次长按到点后配对的 ACTION_UP 没送达该 View（宿主 onPause、休眠、未 detach），
+    latch 会残留，下一次短按就会既不重新计时、又被 UP 当成"已长按"吞掉。`App.post(runnable, delay)`
+    自带 `removeCallbacks`，重复 arm 不会叠加；repeatCount!=0 的重复键不进该分支，故"重复键不重启计时"不变。
   - 到点 → 置 `longPressFired` 并回调 `LongPressListener.onLongPress()`；
   - ACTION_UP → 取消计时；若已触发则消费该次释放并复位（避免长按后又触发点击）；未触发则照常转发，保留短按点击；
   - 额外在 `performClick`、失焦、`onDetachedFromWindow` 中清理，避免残留回调。
 - `TypeAdapter` 新增 `OnClickListener.onLongPress(Class item)`，绑定到 `CustomTypeView.setLongPressListener`。
-- `TypeFragment.resetFilter()`：清空全部 `Value.selected`、`mExtends.clear()`、面板可见时 `hideFilter()+showFilter()` 重建行、有变化才 `onRefresh()` 并 `Notify.show(R.string.filter_reset)`。
+- `TypeFragment.resetFilter()`：清空全部 `Value.selected`、`mExtends.clear()`；**仅在确有变化时**才在面板可见下
+  `hideFilter()+showFilter()` 重建行、`onRefresh()` 并 `Notify.show(R.string.filter_reset)`。无变化时直接返回 `false`，
+  不重建也不把面板滚回首行（`showFilter()` 内有 `postDelayed(scrollToPosition(0), 48)`）。
 - `FolderFragment.resetFilter()` 转发到子 `TypeFragment`。
 - `VodActivity.onLongPress` / `HomeActivity.onLongPress` 做守卫（当前分类、非 home、分类条内容可见），再调用重置。
 - 新增字符串 `filter_reset`（en / zh-rCN / zh-rTW）。
@@ -59,9 +64,12 @@ JAVA_HOME="C:\Program Files\Microsoft\jdk-21.0.12.8-hotspot" \
   :app:compileLeanbackArm64_v8aDebugJavaWithJavac --continue
 ```
 
-结果：`BUILD SUCCESSFUL`，`TvFilterResetLongPressTest` 3/3 通过（tests=3, failures=0, errors=0），`:app:compileLeanbackArm64_v8aDebugJavaWithJavac` 通过。
+结果：`BUILD SUCCESSFUL`，`TvFilterResetLongPressTest` 4/4 通过（tests=4, failures=0, errors=0），`:app:compileLeanbackArm64_v8aDebugJavaWithJavac` 通过。
 
-覆盖面：长按到点只触发一次且吞掉随后的点击；未到阈值仍按短按点击；重复 ACTION_DOWN 不重启计时。
+覆盖面：长按到点只触发一次且吞掉随后的点击；未到阈值仍按短按点击；重复 ACTION_DOWN 不重启计时；
+长按到点后 ACTION_UP 丢失时，下一次短按仍是正常点击（`aLostReleaseDoesNotSwallowTheNextClick`）。
+该用例做过负向对照：把 DOWN 分支回退成旧的 `&& !longPressFired` 写法后，它会在断言处失败（4 tests, 1 failed），
+证明用例确实能抓住该缺陷。
 
 过程中修正的两点：
 

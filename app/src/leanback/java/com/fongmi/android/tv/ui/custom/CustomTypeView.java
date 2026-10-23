@@ -59,8 +59,13 @@ public class CustomTypeView extends MaterialTextView {
 
     private boolean onLongPressKey(KeyEvent event) {
         if (KeyUtil.isActionDown(event)) {
-            // Key repeats must not restart the timer; only the first press arms it.
-            if (event.getRepeatCount() == 0 && !longPressFired) App.post(longPressRunnable, LONG_PRESS_MS);
+            // Key repeats must not restart the timer; only the first press arms it. A fresh press
+            // also clears any latch left behind by a release this view never received (pause,
+            // sleep, detach), otherwise that stale latch would swallow the next click.
+            if (event.getRepeatCount() == 0) {
+                longPressFired = false;
+                App.post(longPressRunnable, LONG_PRESS_MS);
+            }
             return super.dispatchKeyEvent(event);
         }
         if (KeyUtil.isActionUp(event)) {

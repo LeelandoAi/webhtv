@@ -105,6 +105,22 @@ public class TvFilterResetLongPressTest {
         assertEquals(0, clickCount);
     }
 
+    @Test
+    public void aLostReleaseDoesNotSwallowTheNextClick() {
+        key(KeyEvent.ACTION_DOWN, 0);
+        mainLooper().idleFor(Duration.ofMillis(CustomTypeView.LONG_PRESS_MS + 200));
+        assertEquals(1, longPressCount);
+        // The matching ACTION_UP never reached this view (pause, sleep, detach). The next fresh
+        // press must still behave as an ordinary short press instead of inheriting a stale latch
+        // that would skip the timer and then swallow the release.
+        key(KeyEvent.ACTION_DOWN, 0);
+        mainLooper().idleFor(Duration.ofMillis(100));
+        key(KeyEvent.ACTION_UP, 0);
+        mainLooper().idleFor(Duration.ofMillis(200));
+        assertEquals(1, longPressCount);
+        assertEquals(1, clickCount);
+    }
+
     private void key(int action, int repeatCount) {
         long eventTime = android.os.SystemClock.uptimeMillis();
         KeyEvent event = new KeyEvent(eventTime, eventTime, action, KeyEvent.KEYCODE_DPAD_CENTER, repeatCount);
