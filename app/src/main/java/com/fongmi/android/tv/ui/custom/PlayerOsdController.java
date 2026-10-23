@@ -17,6 +17,8 @@ import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.webkit.WebView;
 import android.widget.TextView;
 
@@ -203,6 +205,9 @@ public class PlayerOsdController {
 
     private boolean render() {
         if (suppressed) {
+            // mobile 播放器在控制栏出现时会抑制整个 OSD 根（控制栏自带标题与分辨率）。
+            // 媒体信息徽标是唯一的例外：它本来就只在控制栏出现时展示。
+            if (controlsVisible && renderMediaBadgesOnly()) return true;
             root.setVisibility(View.GONE);
             return false;
         }
@@ -220,10 +225,11 @@ public class PlayerOsdController {
             bottomLeft.setVisibility(View.GONE);
             bottomRight.setVisibility(View.GONE);
             diagnosticsPanel.setVisibility(View.GONE);
-            if (mediaBadges != null) mediaBadges.setVisibility(View.GONE);
+            setMediaBadges(player);
             if (miniProgress != null) miniProgress.setVisibility(View.GONE);
-            // 如果标题或时间至少有一个显示，则显示 root
-            boolean hasVisible = topLeft.getVisibility() == View.VISIBLE || topRight.getVisibility() == View.VISIBLE;
+            // 标题、时间、媒体信息徽标，至少一个可见就显示 root
+            boolean hasVisible = topLeft.getVisibility() == View.VISIBLE || topRight.getVisibility() == View.VISIBLE
+                    || (mediaBadges != null && mediaBadges.getVisibility() == View.VISIBLE);
             root.setVisibility(hasVisible ? View.VISIBLE : View.GONE);
             return true;
         }
@@ -236,8 +242,12 @@ public class PlayerOsdController {
             return false;
         }
 
-        // 控制栏隐藏时，按用户设置显示
+        // 控制栏隐藏时，按用户设置显示；媒体信息徽标只在控制栏出现时展示
         root.setVisibility(View.VISIBLE);
+        if (mediaBadges != null) {
+            mediaBadges.setVisibility(View.GONE);
+            mediaBadgeSignature = "";
+        }
         if (persistentSuppressed) {
             hidePersistent();
             setDiagnosticsPanel(player);
@@ -250,8 +260,24 @@ public class PlayerOsdController {
         setBottomRight();
         setDiagnosticsPanel(player);
         setMiniProgress(player);
-        setMediaBadges(player);
         return true;
+    }
+
+    /**
+     * 控制栏出现但 OSD 根被抑制（mobile 播放器）时的渲染路径。
+     * 只放行媒体信息徽标，四角文本、诊断面板与迷你进度一律隐藏。
+     */
+    private boolean renderMediaBadgesOnly() {
+        topLeft.setVisibility(View.GONE);
+        topRight.setVisibility(View.GONE);
+        bottomLeft.setVisibility(View.GONE);
+        bottomRight.setVisibility(View.GONE);
+        diagnosticsPanel.setVisibility(View.GONE);
+        if (miniProgress != null) miniProgress.setVisibility(View.GONE);
+        setMediaBadges(source.getPlayer());
+        boolean visible = mediaBadges != null && mediaBadges.getVisibility() == View.VISIBLE;
+        root.setVisibility(visible ? View.VISIBLE : View.GONE);
+        return visible;
     }
 
     private void setTopLeft(PlayerManager player) {
@@ -383,7 +409,8 @@ public class PlayerOsdController {
      */
     private void setMediaBadges(PlayerManager player) {
         if (mediaBadges == null) return;
-        if (controlsVisible || !PlayerSetting.isDisplayMediaBadges() || player == null) {
+        // 徽标只在唤醒控制栏时展示：控制栏隐藏的常驻屏显里保持干净。
+        if (!controlsVisible || !PlayerSetting.isDisplayMediaBadges() || player == null) {
             mediaBadges.setVisibility(View.GONE);
             mediaBadgeSignature = "";
             return;
@@ -391,59 +418,115 @@ public class PlayerOsdController {
         Format video = player.getVideoFormat();
         PlayerEngine.VideoPlaybackDetails details = player.getVideoPlaybackDetails();
         AudioPlaybackDiagnostics.Snapshot audio = player.getAudioPlaybackDiagnostics();
-        List<String> badges = MediaBadgeResolver.resolve(video, details, audio == null ? null : audio.activeTrack(), player.getUrl());
+        List<MediaBadgeResolver.MediaBadge> badges = MediaBadgeResolver.resolve(video, details, audio == null ? null : audio.activeTrack(), player.getUrl());
         if (badges.isEmpty()) {
             mediaBadges.setVisibility(View.GONE);
             mediaBadgeSignature = "";
             return;
         }
         applyMediaBadgePosition();
-        String signature = TextUtils.join("|", badges);
-        if (!signature.equals(mediaBadgeSignature)) {
-            mediaBadgeSignature = signature;
+        StringBuilder signature = new StringBuilder();
+        for (MediaBadgeResolver.MediaBadge badge : badges) signature.append(badge.icon()).append(':').append(badge.text()).append('|');
+        String next = signature.toString();
+        if (!next.equals(mediaBadgeSignature)) {
+            mediaBadgeSignature = next;
             mediaBadges.removeAllViews();
-            for (String badge : badges) mediaBadges.addView(createMediaBadge(badge));
+            for (MediaBadgeResolver.MediaBadge badge : badges) mediaBadges.addView(createMediaBadge(badge));
         }
         mediaBadges.setVisibility(View.VISIBLE);
     }
 
+    /**
+     * 徽标只在控制栏可见时渲染，而控制栏本身占据画面顶部与底部，
+     * 因此四角位置都要从控制栏高度内缩，否则徽标会压住标题栏或进度条。
+     */
     private void applyMediaBadgePosition() {
         ViewGroup.LayoutParams params = mediaBadges.getLayoutParams();
         if (!(params instanceof FrameLayout.LayoutParams)) return;
         FrameLayout.LayoutParams layoutParams = (FrameLayout.LayoutParams) params;
         int gravity;
+        int topMargin;
+        int bottomMargin;
         switch (PlayerSetting.getMediaBadgePosition()) {
             case 0:
                 gravity = Gravity.TOP | Gravity.START;
+                topMargin = dp(64);
+                bottomMargin = 0;
                 break;
             case 1:
                 gravity = Gravity.TOP | Gravity.END;
+                topMargin = dp(64);
+                bottomMargin = 0;
                 break;
             case 2:
                 gravity = Gravity.BOTTOM | Gravity.START;
+                topMargin = 0;
+                bottomMargin = dp(80);
                 break;
             default:
                 gravity = Gravity.BOTTOM | Gravity.END;
+                topMargin = 0;
+                bottomMargin = dp(80);
                 break;
         }
-        if (layoutParams.gravity == gravity) return;
+        if (layoutParams.gravity == gravity && layoutParams.topMargin == topMargin && layoutParams.bottomMargin == bottomMargin) return;
         layoutParams.gravity = gravity;
+        layoutParams.topMargin = topMargin;
+        layoutParams.bottomMargin = bottomMargin;
         mediaBadges.setLayoutParams(layoutParams);
     }
 
-    private TextView createMediaBadge(String text) {
-        TextView view = new TextView(root.getContext());
+    /**
+     * 一个徽标 = 左侧类别图标 + 右侧事实文本。
+     * 图标全部是本地矢量图，不依赖网络，也不使用任何第三方商标图形。
+     */
+    private View createMediaBadge(MediaBadgeResolver.MediaBadge badge) {
+        Context context = root.getContext();
+        LinearLayout view = new LinearLayout(context);
+        view.setOrientation(LinearLayout.HORIZONTAL);
+        view.setGravity(Gravity.CENTER_VERTICAL);
         FlexboxLayout.LayoutParams params = new FlexboxLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         params.setMargins(0, dp(2), dp(4), 0);
         view.setLayoutParams(params);
         view.setBackgroundResource(R.drawable.shape_player_osd_badge);
         view.setPadding(dp(6), dp(2), dp(6), dp(2));
-        view.setSingleLine(true);
-        view.setText(text);
-        view.setTextColor(0xFFFFFFFF);
-        view.setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f);
-        view.setShadowLayer(2f, 1.2f, 1.2f, App.get().getResources().getColor(R.color.webhtv_color_player_scrim));
+
+        ImageView icon = new ImageView(context);
+        LinearLayout.LayoutParams iconParams = new LinearLayout.LayoutParams(dp(10), dp(10));
+        iconParams.setMarginEnd(dp(3));
+        icon.setLayoutParams(iconParams);
+        icon.setImageResource(mediaBadgeIcon(badge.icon()));
+        icon.setColorFilter(0xFFFFFFFF);
+        view.addView(icon);
+
+        TextView text = new TextView(context);
+        text.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        text.setSingleLine(true);
+        text.setText(badge.text());
+        text.setTextColor(0xFFFFFFFF);
+        text.setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f);
+        text.setShadowLayer(2f, 1.2f, 1.2f, App.get().getResources().getColor(R.color.webhtv_color_player_scrim));
+        view.addView(text);
         return view;
+    }
+
+    private static int mediaBadgeIcon(MediaBadgeResolver.Icon icon) {
+        switch (icon) {
+            case RESOLUTION:
+                return R.drawable.ic_badge_resolution;
+            case DYNAMIC_RANGE:
+                return R.drawable.ic_badge_dynamic_range;
+            case VIDEO_CODEC:
+                return R.drawable.ic_badge_video_codec;
+            case FRAME_RATE:
+                return R.drawable.ic_badge_frame_rate;
+            case BITRATE:
+                return R.drawable.ic_badge_bitrate;
+            case AUDIO:
+                return R.drawable.ic_badge_audio;
+            default:
+                return R.drawable.ic_badge_container;
+        }
     }
 
     private void setTextSize(float sp) {

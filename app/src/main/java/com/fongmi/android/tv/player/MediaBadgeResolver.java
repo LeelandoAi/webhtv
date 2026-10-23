@@ -22,6 +22,15 @@ public final class MediaBadgeResolver {
 
     private static final String[] EXTENSIONS = {"mkv", "mp4", "m4v", "webm", "mov", "avi", "flv", "ts", "m2ts", "wmv", "mpg", "mpeg", "3gp", "ogv"};
 
+    /** 徽标类别，决定徽标左侧显示哪一个图标。 */
+    public enum Icon {
+        RESOLUTION, DYNAMIC_RANGE, VIDEO_CODEC, FRAME_RATE, BITRATE, AUDIO, CONTAINER
+    }
+
+    /** 一条徽标：展示文本 + 类别图标。 */
+    public record MediaBadge(String text, Icon icon) {
+    }
+
     private MediaBadgeResolver() {
     }
 
@@ -30,25 +39,26 @@ public final class MediaBadgeResolver {
      * @param videoDetails 引擎给出的视频播放细节（Dolby Vision 等）；可为 null
      * @param audio        当前音频轨；可为 null
      * @param url          播放地址，仅在容器 MIME 缺失时用于扩展名兜底；可为 null
-     * @return 按展示顺序排列的徽标文本，可能为空列表
+     * @return 按展示顺序排列的徽标，可能为空列表
      */
-    public static List<String> resolve(Format video, PlayerEngine.VideoPlaybackDetails videoDetails, AudioPlaybackDiagnostics.Track audio, String url) {
-        List<String> badges = new ArrayList<>();
-        add(badges, resolution(video));
-        add(badges, dynamicRange(videoDetails, video));
-        add(badges, videoCodec(video, videoDetails));
-        add(badges, frameRate(video));
-        add(badges, videoBitrate(video));
-        add(badges, audioText(audio));
-        add(badges, container(video, url));
+    public static List<MediaBadge> resolve(Format video, PlayerEngine.VideoPlaybackDetails videoDetails, AudioPlaybackDiagnostics.Track audio, String url) {
+        List<MediaBadge> badges = new ArrayList<>();
+        add(badges, resolution(video), Icon.RESOLUTION);
+        add(badges, dynamicRange(videoDetails, video), Icon.DYNAMIC_RANGE);
+        add(badges, videoCodec(video, videoDetails), Icon.VIDEO_CODEC);
+        add(badges, frameRate(video), Icon.FRAME_RATE);
+        add(badges, videoBitrate(video), Icon.BITRATE);
+        add(badges, audioText(audio), Icon.AUDIO);
+        add(badges, container(video, url), Icon.CONTAINER);
         return badges;
     }
 
-    private static void add(List<String> badges, String badge) {
-        if (badge == null) return;
-        String text = badge.trim();
-        if (text.isEmpty() || badges.contains(text)) return;
-        badges.add(text);
+    private static void add(List<MediaBadge> badges, String text, Icon icon) {
+        if (text == null) return;
+        String value = text.trim();
+        if (value.isEmpty()) return;
+        for (MediaBadge badge : badges) if (badge.text().equals(value)) return;
+        badges.add(new MediaBadge(value, icon));
     }
 
     private static String resolution(Format video) {
@@ -112,12 +122,24 @@ public final class MediaBadgeResolver {
     private static String audioText(AudioPlaybackDiagnostics.Track audio) {
         if (audio == null || !audio.available()) return null;
         StringBuilder builder = new StringBuilder();
-        if (!isEmpty(audio.codec())) builder.append(audio.codec().toUpperCase(Locale.US));
+        if (!isEmpty(audio.codec())) builder.append(audioCodec(audio.codec()));
         String channels = AudioPlaybackDiagnostics.channelLabel(audio.channels());
         if (!isEmpty(channels)) append(builder, channels);
         if (audio.sampleRate() > 0) append(builder, sampleRateText(audio.sampleRate()));
         if (audio.bitrate() > 0) append(builder, bitrateText(audio.bitrate()));
         return builder.length() == 0 ? null : builder.toString();
+    }
+
+    /**
+     * 复用音频诊断的编解码归一化，避免把 media3 的 MIME 子类型（mp4a.40.2）直接当徽标文本。
+     * 归一化失败时退回原始 codec 的大写形式，保证信息不丢。
+     */
+    private static String audioCodec(String codec) {
+        String label = AudioPlaybackDiagnostics.codecLabel(codec, "", "", "");
+        // codecLabel 已经给出规范大写/品牌写法（AAC、E-AC-3、Dolby TrueHD Atmos），
+        // 只有它认不出来时才退回原始 codec 的大写形式。
+        if (label.isEmpty() || "音频".equals(label)) return codec.toUpperCase(Locale.US);
+        return label;
     }
 
     private static void append(StringBuilder builder, String value) {
