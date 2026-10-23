@@ -13,8 +13,10 @@ import android.text.TextUtils;
 import android.util.DisplayMetrics;
 import android.util.TypedValue;
 import android.view.Display;
+import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.FrameLayout;
 import android.webkit.WebView;
 import android.widget.TextView;
 
@@ -28,6 +30,7 @@ import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.player.DolbyVisionFormatLabel;
 import com.fongmi.android.tv.player.AudioPlaybackDiagnostics;
 import com.fongmi.android.tv.player.GpuLoadMonitor;
+import com.fongmi.android.tv.player.MediaBadgeResolver;
 import com.fongmi.android.tv.player.ijk.IjkDecodePressurePolicy;
 import com.fongmi.android.tv.player.PlayerManager;
 import com.fongmi.android.tv.player.PlaybackPanelResourceMonitor;
@@ -41,10 +44,12 @@ import com.fongmi.android.tv.setting.PlayerSetting;
 import com.fongmi.android.tv.setting.PreloadSetting;
 import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.utils.Util;
+import com.google.android.flexbox.FlexboxLayout;
 
 import java.text.DecimalFormat;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.List;
 import java.util.Locale;
 
 public class PlayerOsdController {
@@ -68,6 +73,7 @@ public class PlayerOsdController {
     private final TextView diagnostics;
     private final TextView diagnosticsExtra;
     private final View diagnosticsPanel;
+    private final ViewGroup mediaBadges;
     private final MiniProgressView miniProgress;
     private final Runnable update;
     private final Source source;
@@ -85,6 +91,7 @@ public class PlayerOsdController {
     private boolean controlsVisible;
     private boolean diagnosticsVisible;
     private boolean persistentSuppressed;
+    private String mediaBadgeSignature = "";
     private boolean started;
     private PlayerManager diagnosticsSamplingPlayer;
 
@@ -99,6 +106,7 @@ public class PlayerOsdController {
         this.diagnostics = diagnostics;
         this.diagnosticsExtra = root.findViewById(R.id.osdDiagnosticsExtra);
         this.diagnosticsPanel = root.findViewById(R.id.osdDiagnosticsPanel);
+        this.mediaBadges = root.findViewById(R.id.osdMediaBadges);
         this.topRight = topRight;
         this.topLeft = topLeft;
         this.miniSp = miniSp;
@@ -212,6 +220,7 @@ public class PlayerOsdController {
             bottomLeft.setVisibility(View.GONE);
             bottomRight.setVisibility(View.GONE);
             diagnosticsPanel.setVisibility(View.GONE);
+            if (mediaBadges != null) mediaBadges.setVisibility(View.GONE);
             if (miniProgress != null) miniProgress.setVisibility(View.GONE);
             // 如果标题或时间至少有一个显示，则显示 root
             boolean hasVisible = topLeft.getVisibility() == View.VISIBLE || topRight.getVisibility() == View.VISIBLE;
@@ -241,6 +250,7 @@ public class PlayerOsdController {
         setBottomRight();
         setDiagnosticsPanel(player);
         setMiniProgress(player);
+        setMediaBadges(player);
         return true;
     }
 
@@ -366,6 +376,76 @@ public class PlayerOsdController {
         miniProgress.setVisibility(View.VISIBLE);
     }
 
+    /**
+     * 屏显媒体信息徽标：只显示播放器能直接证明的事实。
+     * 每秒轮询都会走到这里，因此只有徽标文本发生变化时才重建子视图，
+     * 避免每秒钟反复 addView 触发测量与布局。
+     */
+    private void setMediaBadges(PlayerManager player) {
+        if (mediaBadges == null) return;
+        if (controlsVisible || !PlayerSetting.isDisplayMediaBadges() || player == null) {
+            mediaBadges.setVisibility(View.GONE);
+            mediaBadgeSignature = "";
+            return;
+        }
+        Format video = player.getVideoFormat();
+        PlayerEngine.VideoPlaybackDetails details = player.getVideoPlaybackDetails();
+        AudioPlaybackDiagnostics.Snapshot audio = player.getAudioPlaybackDiagnostics();
+        List<String> badges = MediaBadgeResolver.resolve(video, details, audio == null ? null : audio.activeTrack(), player.getUrl());
+        if (badges.isEmpty()) {
+            mediaBadges.setVisibility(View.GONE);
+            mediaBadgeSignature = "";
+            return;
+        }
+        applyMediaBadgePosition();
+        String signature = TextUtils.join("|", badges);
+        if (!signature.equals(mediaBadgeSignature)) {
+            mediaBadgeSignature = signature;
+            mediaBadges.removeAllViews();
+            for (String badge : badges) mediaBadges.addView(createMediaBadge(badge));
+        }
+        mediaBadges.setVisibility(View.VISIBLE);
+    }
+
+    private void applyMediaBadgePosition() {
+        ViewGroup.LayoutParams params = mediaBadges.getLayoutParams();
+        if (!(params instanceof FrameLayout.LayoutParams)) return;
+        FrameLayout.LayoutParams layoutParams = (FrameLayout.LayoutParams) params;
+        int gravity;
+        switch (PlayerSetting.getMediaBadgePosition()) {
+            case 0:
+                gravity = Gravity.TOP | Gravity.START;
+                break;
+            case 1:
+                gravity = Gravity.TOP | Gravity.END;
+                break;
+            case 2:
+                gravity = Gravity.BOTTOM | Gravity.START;
+                break;
+            default:
+                gravity = Gravity.BOTTOM | Gravity.END;
+                break;
+        }
+        if (layoutParams.gravity == gravity) return;
+        layoutParams.gravity = gravity;
+        mediaBadges.setLayoutParams(layoutParams);
+    }
+
+    private TextView createMediaBadge(String text) {
+        TextView view = new TextView(root.getContext());
+        FlexboxLayout.LayoutParams params = new FlexboxLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        params.setMargins(0, dp(2), dp(4), 0);
+        view.setLayoutParams(params);
+        view.setBackgroundResource(R.drawable.shape_player_osd_badge);
+        view.setPadding(dp(6), dp(2), dp(6), dp(2));
+        view.setSingleLine(true);
+        view.setText(text);
+        view.setTextColor(0xFFFFFFFF);
+        view.setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f);
+        view.setShadowLayer(2f, 1.2f, 1.2f, App.get().getResources().getColor(R.color.webhtv_color_player_scrim));
+        return view;
+    }
+
     private void setTextSize(float sp) {
         topLeft.setTextSize(TypedValue.COMPLEX_UNIT_SP, sp);
         topLeft.setTextColor(0xFFFFFFFF);
@@ -387,6 +467,7 @@ public class PlayerOsdController {
         bottomLeft.setVisibility(View.GONE);
         bottomRight.setVisibility(View.GONE);
         miniProgress.setVisibility(View.GONE);
+        if (mediaBadges != null) mediaBadges.setVisibility(View.GONE);
     }
 
     private void updateSpeed(PlayerManager player) {
