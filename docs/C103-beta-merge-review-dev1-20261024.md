@@ -12,8 +12,8 @@
 - **Lane**：`standard`
 - **Scope**：`README.md`、`app/src`、`catvod/src`、`chaquo/src`、`docs`
 - **任务守卫**：`C103-BETA-MERGE-DEV1-OSD-20261024`，branch `dev1`，base HEAD `64ee84e68e5b036feb7a1ca2c581c3d996e82178`，受保护脏路径 0
-- **当前状态**：合并、评审、验证、复评均已完成（无必修项，未改代码）；待提交、推送、PR、拉取
-- **下一动作**：`task_guard.sh finish` 提交合并，推送 `dev1`，创建到 `beta` 的 PR，`git fetch --prune`
+- **当前状态**：合并、评审、验证、复评、提交、推送、PR、拉取均已完成；工作树干净
+- **下一动作**：无；等待 PR #487 评审/合并（本轮只创建 PR，不合并）
 
 ---
 
@@ -84,8 +84,8 @@
 
 ## 6. 交付坐标
 
-- 合并提交：待 `task_guard.sh finish` 生成后回填（双亲 `64ee84e68e5b036feb7a1ca2c581c3d996e82178` + `7c725e4d7ee43ca0a187e420b224b33bb0a39a6a`）。
-- recovery tag：待回填。
-- 推送：`dev1`。
-- PR：待回填（`base=beta`/`head=dev1`，只创建不合并）。
-- 拉取：待回填。
+- 合并提交：`1322505938cecc897fa2a60f9edffc9a75402bc6`（双亲 `64ee84e68e5b036feb7a1ca2c581c3d996e82178` + `7c725e4d7ee43ca0a187e420b224b33bb0a39a6a`）。
+- recovery tag：`recovery/C103-BETA-MERGE-DEV1-OSD-20261024/20261024064903-1322505938ce`（本地保留，不推送）。
+- 推送：`dev1`（`0f297ce6da..1322505938`），`origin/dev1` 与本地一致。
+- PR：**#487** <https://github.com/Silent1566/webhtv/pull/487>（`base=beta`/`head=dev1`，只创建不合并）。
+- 拉取：`git fetch origin --prune --tags` 后 `origin/beta` 仍为 `7c725e4d7e`（无新推进）；拉入新标签 `v5.6.0-beta-202610240855`（及 `v5.6.0-beta-202610221924`、若干个 `recovery/*`），本地已有同名发布标签按「不覆盖已发布标签」被 git 拒绝更新，符合预期。
