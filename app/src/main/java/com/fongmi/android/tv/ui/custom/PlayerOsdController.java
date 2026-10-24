@@ -518,7 +518,9 @@ public class PlayerOsdController {
         LinearLayout view = new LinearLayout(context);
         view.setOrientation(LinearLayout.HORIZONTAL);
         view.setGravity(Gravity.CENTER_VERTICAL);
-        FlexboxLayout.LayoutParams params = new FlexboxLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        // 固定胶囊高度：有牌的徽标由 16dp 牌撑高，纯文本徽标只有一行 10sp 文本，
+        // 不固定高度时两者会差 4px 左右，一行里看起来参差不齐。
+        FlexboxLayout.LayoutParams params = new FlexboxLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(20));
         params.setMargins(0, dp(2), dp(4), 0);
         view.setLayoutParams(params);
         view.setBackground(categoryBackground(badge.group()));
@@ -572,6 +574,8 @@ public class PlayerOsdController {
                 return 0xFF5A8DEE;
             case DYNAMIC_RANGE:
                 return 0xFF7B61FF;
+            case VIDEO_TECH:
+                return 0xFF22D3EE;
             case VIDEO_CODEC:
                 return 0xFF14B8A6;
             case AUDIO:
@@ -588,6 +592,8 @@ public class PlayerOsdController {
                 return 0xFF0EA5E9;
             case QUALITY:
                 return 0xFFA855F7;
+            case EDITION:
+                return 0xFF8B5CF6;
             case SPECIAL_TAG:
                 return 0xFFEC4899;
             case IMAX:
@@ -628,6 +634,21 @@ public class PlayerOsdController {
         map.put("gst_black_and_white", R.drawable.badge_gst_black_and_white);
         map.put("gst_true_hue", R.drawable.badge_gst_true_hue);
         map.put("gst_theatrical", R.drawable.badge_gst_theatrical);
+        map.put("ged_cc", R.drawable.badge_ged_cc);
+        map.put("ged_hk", R.drawable.badge_ged_hk);
+        map.put("ged_tw", R.drawable.badge_ged_tw);
+        map.put("ged_jp", R.drawable.badge_ged_jp);
+        map.put("ged_us", R.drawable.badge_ged_us);
+        map.put("ged_uk", R.drawable.badge_ged_uk);
+        map.put("ged_de", R.drawable.badge_ged_de);
+        map.put("ged_fr", R.drawable.badge_ged_fr);
+        map.put("ged_eu", R.drawable.badge_ged_eu);
+        map.put("ged_kr", R.drawable.badge_ged_kr);
+        map.put("ged_arrow", R.drawable.badge_ged_arrow);
+        map.put("ged_dieying", R.drawable.badge_ged_dieying);
+        map.put("ged_allregion", R.drawable.badge_ged_allregion);
+        map.put("gms_iso", R.drawable.badge_gms_iso);
+        map.put("gms_high_bitrate", R.drawable.badge_gms_high_bitrate);
         map.put("gms_remux_1", R.drawable.badge_gms_remux_1);
         map.put("gms_remux_2", R.drawable.badge_gms_remux_2);
         map.put("gms_remux_3", R.drawable.badge_gms_remux_3);
@@ -645,6 +666,7 @@ public class PlayerOsdController {
         map.put("gms_web_4", R.drawable.badge_gms_web_4);
         map.put("gms_web_5", R.drawable.badge_gms_web_5);
         map.put("gms_web_6", R.drawable.badge_gms_web_6);
+        map.put("gr_8k", R.drawable.badge_gr_8k);
         map.put("gr_4k", R.drawable.badge_gr_4k);
         map.put("gr_1440p", R.drawable.badge_gr_1440p);
         map.put("gr_1080p", R.drawable.badge_gr_1080p);
@@ -671,6 +693,10 @@ public class PlayerOsdController {
         map.put("gv_dolby_vision_hdr10_plus", R.drawable.badge_gv_dolby_vision_hdr10_plus);
         map.put("gv_dolby_vision_hdr10", R.drawable.badge_gv_dolby_vision_hdr10);
         map.put("gv_dolby_vision_hdr", R.drawable.badge_gv_dolby_vision_hdr);
+        map.put("gv_12bit", R.drawable.badge_gv_12bit);
+        map.put("gv_8bit", R.drawable.badge_gv_8bit);
+        map.put("gvf_hdrvivid", R.drawable.badge_gvf_hdrvivid);
+        map.put("gvf_3d", R.drawable.badge_gvf_3d);
         map.put("gv_dolby_vision", R.drawable.badge_gv_dolby_vision);
         map.put("gv_hdr10_plus", R.drawable.badge_gv_hdr10_plus);
         map.put("gv_hdr10", R.drawable.badge_gv_hdr10);
@@ -695,11 +721,18 @@ public class PlayerOsdController {
         map.put("ga_opus", R.drawable.badge_ga_opus);
         map.put("ga_dolby_digital", R.drawable.badge_ga_dolby_digital);
         map.put("ga_aac", R.drawable.badge_ga_aac);
+        map.put("ga_lpcm", R.drawable.badge_ga_lpcm);
+        map.put("ga_lossless", R.drawable.badge_ga_lossless);
         map.put("gc_7_1", R.drawable.badge_gc_7_1);
         map.put("gc_6_1", R.drawable.badge_gc_6_1);
         map.put("gc_5_1", R.drawable.badge_gc_5_1);
         map.put("gc_2_0", R.drawable.badge_gc_2_0);
+        map.put("gc_7_1_4", R.drawable.badge_gc_7_1_4);
+        map.put("gc_5_1_4", R.drawable.badge_gc_5_1_4);
+        map.put("gc_5_1_2", R.drawable.badge_gc_5_1_2);
         map.put("ge_av1", R.drawable.badge_ge_av1);
+        map.put("ge_vvc", R.drawable.badge_ge_vvc);
+        map.put("gfr_hfr", R.drawable.badge_gfr_hfr);
         map.put("ge_hevc", R.drawable.badge_ge_hevc);
         map.put("ge_avc", R.drawable.badge_ge_avc);
         map.put("ge_xvid", R.drawable.badge_ge_xvid);

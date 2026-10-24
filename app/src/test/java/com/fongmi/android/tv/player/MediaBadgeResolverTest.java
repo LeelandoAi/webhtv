@@ -255,11 +255,65 @@ public class MediaBadgeResolverTest {
         assertEquals(Arrays.asList("gr_1080p", "ge_hevc"), plates(badges));
     }
 
+
+    /** 扩充包：8K 分辨率、12bit 位深、VVC 编码都来自播放器运行时事实。 */
+    @Test
+    public void expansionRuntimeFactsAreRecognised() {
+        Format video = new Format.Builder()
+                .setWidth(7680)
+                .setHeight(4320)
+                .setCodecs("video/vvc")
+                .setColorInfo(new ColorInfo.Builder().setColorTransfer(C.COLOR_TRANSFER_SDR).setLumaBitdepth(12).setChromaBitdepth(12).build())
+                .build();
+        List<String> plates = plates(MediaBadgeResolver.resolve(video, null, null, null, null));
+
+        assertTrue(plates.contains("gr_8k"));
+        assertFalse(plates.contains("gr_4k"));
+        assertTrue(plates.contains("gv_12bit"));
+        assertTrue(plates.contains("ge_vvc"));
+    }
+
+    /** 扩充包：中文版别、HDR Vivid、3D、高码率、ISO 原盘镜像只由片源名证明。 */
+    @Test
+    public void expansionFileNameFactsAreRecognised() {
+        List<String> edition = plates(MediaBadgeResolver.resolve(null, null, null,
+                "https://example.com/Movie.2024.港版.1080p.BluRay.mkv", null));
+        assertTrue(edition.contains("ged_hk"));
+        assertEquals(1, countGroup(MediaBadgeResolver.resolve(null, null, null,
+                "https://example.com/Movie.2024.港版.台版.1080p.mkv", null), Group.EDITION));
+
+        // 非运行时分组每组只留一枚，HDR Vivid 排在 3D 之前，同一文件名里只出前者。
+        List<String> videoTech = plates(MediaBadgeResolver.resolve(null, null, null,
+                "https://example.com/Movie.2024.HDR.Vivid.3D.1080p.mkv", null));
+        assertTrue(videoTech.contains("gvf_hdrvivid"));
+        assertFalse(videoTech.contains("gvf_3d"));
+        assertTrue(plates(MediaBadgeResolver.resolve(null, null, null,
+                "https://example.com/Movie.2024.3D.1080p.mkv", null)).contains("gvf_3d"));
+
+        assertTrue(plates(MediaBadgeResolver.resolve(null, null, null,
+                "https://example.com/Movie.2024.高码率.1080p.mkv", null)).contains("gms_high_bitrate"));
+        assertTrue(plates(MediaBadgeResolver.resolve(null, null, null,
+                "https://example.com/Movie.2024.1080p.ISO", null)).contains("gms_iso"));
+    }
+
+    /** 扩充包：LPCM / 无损与高度声道只能靠文件名兜底，运行时 Track 给不出这些事实。 */
+    @Test
+    public void expansionAudioFactsComeFromTheFileName() {
+        List<String> lossless = plates(MediaBadgeResolver.resolve(null, null, null,
+                "https://example.com/Movie.2024.1080p.LPCM.2.0.mkv", null));
+        assertTrue(lossless.contains("ga_lpcm"));
+
+        List<String> heightChannels = plates(MediaBadgeResolver.resolve(null, null, null,
+                "https://example.com/Movie.2024.1080p.TrueHD.7.1.4.Atmos.mkv", null));
+        assertTrue(heightChannels.contains("gc_7_1_4"));
+        assertFalse(heightChannels.contains("gc_7_1"));
+    }
+
     /** 全表自检：每一条牌的图形键都能在 Catalog 里找到，且运行时标记与分组一致。 */
     @Test
     public void catalogIsConsistent() {
         MediaBadgeCatalog.Rule[] rules = MediaBadgeCatalog.rules();
-        assertEquals(100, rules.length);
+        assertEquals(127, rules.length);
         assertTrue(MediaBadgeCatalog.patterns().length == rules.length);
         List<String> keys = new ArrayList<>();
         for (MediaBadgeCatalog.Rule rule : rules) {

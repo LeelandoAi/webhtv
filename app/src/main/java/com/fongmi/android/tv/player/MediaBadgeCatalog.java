@@ -3,7 +3,7 @@ package com.fongmi.android.tv.player;
 import java.util.regex.Pattern;
 
 /**
- * 徽标牌的完整清单：参考实现（xperience-app badges 26cc3192）里全部 100 条牌的图形键、规范名与识别正则。
+ * 徽标牌的完整清单：参考实现（xperience-app badges 26cc3192）里全部 124 条牌的图形键（100 条来自参考实现，24 条来自扩充包）、规范名与识别正则。
  * <p>
  * 每一条都按 id 与图片一一对应，图形落在 {@code res/drawable-nodpi/badge_<plate>.webp}，
  * 因此这里是「牌」的唯一事实源：新增或删减牌只需改本表与图片。
@@ -16,8 +16,8 @@ public final class MediaBadgeCatalog {
 
     /** 徽标分组，决定配色与展示顺序。 */
     public enum Group {
-        RESOLUTION, DYNAMIC_RANGE, VIDEO_CODEC, AUDIO, CHANNELS, FRAME_RATE, BITRATE, CONTAINER,
-        MEDIA_SOURCE, QUALITY, SPECIAL_TAG, IMAX, STREAMING
+        RESOLUTION, DYNAMIC_RANGE, VIDEO_TECH, VIDEO_CODEC, AUDIO, CHANNELS, FRAME_RATE, BITRATE, CONTAINER,
+        MEDIA_SOURCE, QUALITY, EDITION, SPECIAL_TAG, IMAX, STREAMING
     }
 
     /**
@@ -48,6 +48,19 @@ public final class MediaBadgeCatalog {
             new Rule(Group.SPECIAL_TAG, "gst_black_and_white", "BLACK & WHITE", "(?i)(?<![\\s\\S])(?=[\\s\\S]*?(?:(?:(?<![A-Za-z0-9])(?:authentic[-_. ]?(?:bw|black[-_. ]?(?:and|&)[-_. ]?white)|bw|b\\s*[&\uff06]\\s*w|black[-_. ]?(?:and|&)[-_. ]?white)(?![A-Za-z0-9]))))(?![\\s\\S]*(?:(?:(?<![A-Za-z0-9])(?:true[-_. ]?hue(?:[-_. ]?(?:full[-_. ]?)?color)?|colorized|full[-_. ]?color)(?![A-Za-z0-9]))))", false),
             new Rule(Group.SPECIAL_TAG, "gst_true_hue", "TRUE-HUE", "(?i)(?<![\\s\\S])(?=[\\s\\S]*?(?:(?:(?<![A-Za-z0-9])(?:true[-_. ]?hue(?:[-_. ]?(?:full[-_. ]?)?color)?|colorized|full[-_. ]?color)(?![A-Za-z0-9]))))(?![\\s\\S]*(?:(?:(?<![A-Za-z0-9])(?:authentic[-_. ]?(?:bw|black[-_. ]?(?:and|&)[-_. ]?white)|bw|b\\s*[&\uff06]\\s*w|black[-_. ]?(?:and|&)[-_. ]?white)(?![A-Za-z0-9]))))", false),
             new Rule(Group.SPECIAL_TAG, "gst_theatrical", "THTR", "(?i)(?<![\\s\\S])(?=[\\s\\S]*?(?:(?:(?<![A-Za-z0-9])(?:theatrical(?:[-_. ]?cut)?|thtr)(?![A-Za-z0-9]))))", false),
+            new Rule(Group.EDITION, "ged_cc", "CC标准收藏", "(?i)(?:CC标准收藏|标准收藏|cc版)", false),
+            new Rule(Group.EDITION, "ged_hk", "港版", "(?:港版)", false),
+            new Rule(Group.EDITION, "ged_tw", "台版", "(?:台版)", false),
+            new Rule(Group.EDITION, "ged_jp", "日版", "(?:日版)", false),
+            new Rule(Group.EDITION, "ged_us", "美版", "(?:美版)", false),
+            new Rule(Group.EDITION, "ged_uk", "英版", "(?:英版)", false),
+            new Rule(Group.EDITION, "ged_de", "德版", "(?:德版)", false),
+            new Rule(Group.EDITION, "ged_fr", "法版", "(?:法版)", false),
+            new Rule(Group.EDITION, "ged_eu", "欧版", "(?:欧版)", false),
+            new Rule(Group.EDITION, "ged_kr", "韩版", "(?:韩版)", false),
+            new Rule(Group.EDITION, "ged_arrow", "箭影", "(?:箭影(?:版)?)", false),
+            new Rule(Group.EDITION, "ged_dieying", "碟影", "(?:碟影(?:版)?)", false),
+            new Rule(Group.EDITION, "ged_allregion", "全区版", "(?:全区版|国际版)", false),
             new Rule(Group.MEDIA_SOURCE, "gms_remux_1", "REMUX 1", "(?i)(?<![\\s\\S])(?=[\\s\\S]*?(?:(?<![A-Za-z0-9])(?:(?:(?:bd|uhd)[-_. ]?)?remux|bdremux|uhdremux)(?![A-Za-z0-9])))(?=[\\s\\S]*?(?:(?:^|[\\s._-])(?:[\\[(])?(?:BiZKiT|BLURANiUM|CiNEPHiLES|FraMeSToR|PiRAMiDHEAD|WiLDCAT)(?:[\\])])?(?=\\.(?:mkv|mp4|avi|m2ts|ts|wmv|mov|m4v|mpg|mpeg|webm|iso)(?:$|[?#\\s])|$|[?#])))", false),
             new Rule(Group.MEDIA_SOURCE, "gms_remux_2", "REMUX 2", "(?i)(?<![\\s\\S])(?=[\\s\\S]*?(?:(?<![A-Za-z0-9])(?:(?:(?:bd|uhd)[-_. ]?)?remux|bdremux|uhdremux)(?![A-Za-z0-9])))(?=[\\s\\S]*?(?:(?:^|[\\s._-])(?:[\\[(])?(?:ATELiER|NCmt|playBD|SiCFoI|SURFINBIRD|TEPES|PTer)(?:[\\])])?(?=\\.(?:mkv|mp4|avi|m2ts|ts|wmv|mov|m4v|mpg|mpeg|webm|iso)(?:$|[?#\\s])|$|[?#])))", false),
             new Rule(Group.MEDIA_SOURCE, "gms_remux_3", "REMUX 3", "(?i)(?<![\\s\\S])(?=[\\s\\S]*?(?:(?<![A-Za-z0-9])(?:(?:(?:bd|uhd)[-_. ]?)?remux|bdremux|uhdremux)(?![A-Za-z0-9])))(?=[\\s\\S]*?(?:(?:^|[\\s._-])(?:[\\[(])?(?:12GaugeShotgun|decibeL|EPSiLON|HiFi|KRaLiMaRKo|TRiToN)(?:[\\])])?(?=\\.(?:mkv|mp4|avi|m2ts|ts|wmv|mov|m4v|mpg|mpeg|webm|iso)(?:$|[?#\\s])|$|[?#])))", false),
@@ -65,6 +78,9 @@ public final class MediaBadgeCatalog {
             new Rule(Group.MEDIA_SOURCE, "gms_web_4", "WEB 4", "(?i)(?<![\\s\\S])(?=[\\s\\S]*?(?:(?<![A-Za-z0-9])(?:web(?:[-_. ]?dl(?:mux)?|[-_. ]?rip|mux)?|webdl|webrip|webmux)(?![A-Za-z0-9])))(?=[\\s\\S]*?(?:(?:^|[\\s._-])(?:[\\[(])?(?:Erai-raws|ToonsHub|VARYG)(?:[\\])])?(?=\\.(?:mkv|mp4|avi|m2ts|ts|wmv|mov|m4v|mpg|mpeg|webm|iso)(?:$|[?#\\s])|$|[?#])))(?![\\s\\S]*(?:(?:(?<![A-Za-z0-9])(?:(?:(?:bd|uhd)[-_. ]?)?remux|bdremux|uhdremux)(?![A-Za-z0-9])|(?<![A-Za-z0-9])(?:blu[-_. ]?ray|bluray|bdrip|brrip|bdmux|bd(?:720|1080|2160)p?|hd[-_. ]?dvd|hddvd)(?![A-Za-z0-9]))))", false),
             new Rule(Group.MEDIA_SOURCE, "gms_web_5", "WEB 5", "(?i)(?<![\\s\\S])(?=[\\s\\S]*?(?:(?<![A-Za-z0-9])(?:web(?:[-_. ]?dl(?:mux)?|[-_. ]?rip|mux)?|webdl|webrip|webmux)(?![A-Za-z0-9])))(?=[\\s\\S]*?(?:(?:^|[\\s._-])(?:[\\[(])?(?:BlueLobster|HorribleRips|HorribleSubs|KAN3D2M|KiyoshiStar|NanDesuKa|SobsPlease|Some-Stuffs|SubsPlease|URANIME|ZigZag|ZigZab)(?:[\\])])?(?=\\.(?:mkv|mp4|avi|m2ts|ts|wmv|mov|m4v|mpg|mpeg|webm|iso)(?:$|[?#\\s])|$|[?#])))(?![\\s\\S]*(?:(?:(?<![A-Za-z0-9])(?:(?:(?:bd|uhd)[-_. ]?)?remux|bdremux|uhdremux)(?![A-Za-z0-9])|(?<![A-Za-z0-9])(?:blu[-_. ]?ray|bluray|bdrip|brrip|bdmux|bd(?:720|1080|2160)p?|hd[-_. ]?dvd|hddvd)(?![A-Za-z0-9]))))", false),
             new Rule(Group.MEDIA_SOURCE, "gms_web_6", "WEB 6", "(?i)(?<![\\s\\S])(?=[\\s\\S]*?(?:(?<![A-Za-z0-9])(?:web(?:[-_. ]?dl(?:mux)?|[-_. ]?rip|mux)?|webdl|webrip|webmux)(?![A-Za-z0-9])))(?=[\\s\\S]*?(?:(?:^|[\\s._-])(?:[\\[(])?(?:9volt|Asenshi|Commie|DameDesuYo|Kaleido|KawaSubs|Chihiro|Doki|Kantai|Tsundere)(?:[\\])])?(?=\\.(?:mkv|mp4|avi|m2ts|ts|wmv|mov|m4v|mpg|mpeg|webm|iso)(?:$|[?#\\s])|$|[?#])))(?![\\s\\S]*(?:(?:(?<![A-Za-z0-9])(?:(?:(?:bd|uhd)[-_. ]?)?remux|bdremux|uhdremux)(?![A-Za-z0-9])|(?<![A-Za-z0-9])(?:blu[-_. ]?ray|bluray|bdrip|brrip|bdmux|bd(?:720|1080|2160)p?|hd[-_. ]?dvd|hddvd)(?![A-Za-z0-9]))))", false),
+            new Rule(Group.MEDIA_SOURCE, "gms_iso", "ISO", "(?i)(?:\\biso\\b|原盘镜像|镜像原盘)", false),
+            new Rule(Group.MEDIA_SOURCE, "gms_high_bitrate", "HIGH BITRATE", "(?i)(?:高码率|高码|high[\\s._-]*bitrate)", false),
+            new Rule(Group.RESOLUTION, "gr_8k", "8K", "(?i)\\b(?:8k|4320[pi]?)\\b", true),
             new Rule(Group.RESOLUTION, "gr_4k", "4K", "(?i)^(?=.*(?:2160[pi]?|4k|uhd|ultra[\\s._-]?hd))(?!.*(?:1080[pi]?|720[pi]?))", true),
             new Rule(Group.RESOLUTION, "gr_1440p", "1440p", "(?i)^(?=.*(?:1440[pi]?|2560x1440|qhd))(?!.*(?:2160[pi]?|4k|uhd|ultra[\\s._-]?hd))", true),
             new Rule(Group.RESOLUTION, "gr_1080p", "1080p", "(?i)\\b1080[pi]?\\b", true),
@@ -99,6 +115,10 @@ public final class MediaBadgeCatalog {
             new Rule(Group.DYNAMIC_RANGE, "gv_10bit", "10bit", "(?i)^(?=.*(?:\\b10[\\s._-]?bits?\\b|\\bhi10p?\\b))(?!.*hdr[\\s._-]?10[\\s._-]?(?:\\+|(?:plus|p)\\b))(?!.*hdr[\\s._-]?10(?![\\s._-]?bits?\\b))(?!.*\\bhdr\\b)(?!.*\\bhlg\\b)(?!.*\\b(?:dv|dovi|dolby[\\s._-]?vision)\\b)", true),
             new Rule(Group.DYNAMIC_RANGE, "gv_sdr", "SDR", "(?i)^(?=.*\\bsdr\\b)(?!.*hdr[\\s._-]?10[\\s._-]?(?:\\+|(?:plus|p)\\b))(?!.*hdr[\\s._-]?10(?![\\s._-]?bits?\\b))(?!.*\\bhdr\\b)(?!.*\\bhlg\\b)(?!.*(?:\\b10[\\s._-]?bits?\\b|\\bhi10p?\\b))(?!.*\\b(?:dv|dovi|dolby[\\s._-]?vision)\\b)", true),
             new Rule(Group.DYNAMIC_RANGE, "gv_ai", "AI", "(?i)^(?=.*\\b(?:ai[\\s._-]?(?:upscal\\w*|enhanc\\w*)|upscaled?)\\b)(?!.*hdr[\\s._-]?10[\\s._-]?(?:\\+|(?:plus|p)\\b))(?!.*hdr[\\s._-]?10(?![\\s._-]?bits?\\b))(?!.*\\bhdr\\b)(?!.*\\bhlg\\b)(?!.*(?:\\b10[\\s._-]?bits?\\b|\\bhi10p?\\b))(?!.*\\bsdr\\b)(?!.*\\b(?:dv|dovi|dolby[\\s._-]?vision)\\b)", true),
+            new Rule(Group.DYNAMIC_RANGE, "gv_12bit", "12bit", "(?i)\\b12[\\s._-]?bits?\\b", true),
+            new Rule(Group.DYNAMIC_RANGE, "gv_8bit", "8bit", "(?i)\\b8[\\s._-]?bits?\\b", true),
+            new Rule(Group.VIDEO_TECH, "gvf_hdrvivid", "HDR VIVID", "(?i)(?:hdr[\\s._-]*vivid|hdrvivid|菁彩hdr|菁彩视听)", false),
+            new Rule(Group.VIDEO_TECH, "gvf_3d", "3D", "(?i)\\b3d\\b", false),
             new Rule(Group.AUDIO, "ga_dolby_atmos_truehd", "ATMOS TRUEHD", "(?i)^(?=.*\\batmos\\b)(?=.*\\btrue[\\s._-]?hd\\b)", true),
             new Rule(Group.AUDIO, "ga_dts_x_hd_ma", "DTS:X HD MA", "(?i)^(?=.*\\bdts[-_.: ]?x\\b)(?=.*\\bdts[-_. ]?(?:hd[-_. ]?)?ma\\b)", true),
             new Rule(Group.AUDIO, "ga_dolby_atmos_digital_plus", "ATMOS DIGITAL+", "(?i)^(?=.*\\batmos\\b)(?=.*(?:\\bddp|\\bdd\\+|\\beac-?3|\\be-?ac-?3))(?!.*\\btrue[\\s._-]?hd\\b)", true),
@@ -115,15 +135,22 @@ public final class MediaBadgeCatalog {
             new Rule(Group.AUDIO, "ga_opus", "OPUS", "(?i)^(?=.*\\bopus\\b)(?!.*(?:\\batmos\\b|\\btrue[\\s._-]?hd\\b|(?:\\bddp|\\bdd\\+|\\beac-?3|\\be-?ac-?3)|\\b(?:dd[25][. ][01]|ac-?3)\\b|\\bdts[-_.: ]?x\\b|\\bdts[-_. ]?(?:hd[-_. ]?)?ma\\b|\\bdts[-_. ]?hd\\b|\\bdts[-_. ]?es\\b|\\bdts\\b|\\bflac\\b))", true),
             new Rule(Group.AUDIO, "ga_dolby_digital", "DD", "(?i)^(?=.*\\b(?:dd[25][. ][01]|ac-?3)\\b)(?!.*(?:\\bddp|\\bdd\\+|\\beac-?3|\\be-?ac-?3))(?!.*\\batmos\\b)(?!.*\\btrue[\\s._-]?hd\\b)", true),
             new Rule(Group.AUDIO, "ga_aac", "AAC", "(?i)^(?=.*\\b(?:aac|qaac)\\b)(?!.*(?:\\batmos\\b|\\btrue[\\s._-]?hd\\b|(?:\\bddp|\\bdd\\+|\\beac-?3|\\be-?ac-?3)|\\b(?:dd[25][. ][01]|ac-?3)\\b|\\bdts[-_.: ]?x\\b|\\bdts[-_. ]?(?:hd[-_. ]?)?ma\\b|\\bdts[-_. ]?hd\\b|\\bdts[-_. ]?es\\b|\\bdts\\b|\\bflac\\b|\\bopus\\b))", true),
+            new Rule(Group.AUDIO, "ga_lpcm", "LPCM", "(?i)\\b(?:lpcm|pcm)\\b", true),
+            new Rule(Group.AUDIO, "ga_lossless", "LOSSLESS", "(?i)(?:无损|lossless|\\balac\\b|\\bape\\b|\\bwav\\b)", true),
+            new Rule(Group.CHANNELS, "gc_7_1_4", "7.1.4", "(?i)\\b7[.\\-]1[.\\-]4\\b", true),
+            new Rule(Group.CHANNELS, "gc_5_1_4", "5.1.4", "(?i)\\b5[.\\-]1[.\\-]4\\b", true),
+            new Rule(Group.CHANNELS, "gc_5_1_2", "5.1.2", "(?i)\\b5[.\\-]1[.\\-]2\\b", true),
             new Rule(Group.CHANNELS, "gc_7_1", "7.1", "[^0-9][7-8][. ][01](?![0-9])", true),
             new Rule(Group.CHANNELS, "gc_6_1", "6.1", "^(?=.*[^0-9]6[. ][01](?![0-9]))(?!.*[^0-9][7-8][. ][01](?![0-9]))", true),
             new Rule(Group.CHANNELS, "gc_5_1", "5.1", "^(?=.*[^0-9]5[. ][01](?![0-9]))(?!.*[^0-9][7-8][. ][01](?![0-9]))", true),
             new Rule(Group.CHANNELS, "gc_2_0", "2.0", "^(?=.*[^0-9]2[. ]0(?![0-9]))(?!.*[^0-9][5-8][. ][01](?![0-9]))", true),
+            new Rule(Group.FRAME_RATE, "gfr_hfr", "HFR", "(?i)(?:高帧率|\\b(?:60|120)fps\\b)", false),
             new Rule(Group.VIDEO_CODEC, "ge_av1", "AV1", "(?i)\\bav1\\b", true),
             new Rule(Group.VIDEO_CODEC, "ge_hevc", "HEVC", "(?i)\\b(?:x265|h[._-]?265|hevc)\\b", true),
             new Rule(Group.VIDEO_CODEC, "ge_avc", "AVC", "(?i)\\b(?:x264|h[._-]?264|avc)\\b", true),
             new Rule(Group.VIDEO_CODEC, "ge_xvid", "XviD", "(?i)\\bxvid\\b", true),
             new Rule(Group.VIDEO_CODEC, "ge_divx", "DivX", "(?i)\\bdivx\\b", true),
+            new Rule(Group.VIDEO_CODEC, "ge_vvc", "VVC", "(?i)\\b(?:vvc|h[\\s._-]?266|x266)\\b", true),
             new Rule(Group.STREAMING, "gs_peacock", "PEACOCK", "(?i)\\b(?:pcok|peacock)\\b", false),
             new Rule(Group.STREAMING, "gs_netflix", "NETFLIX", "(?i)\\b(?:nflx|netflix)\\b", false),
             new Rule(Group.STREAMING, "gs_prime_video", "PRIME VIDEO", "(?i)\\b(?:amzn|amazon|primevideo|prime[\\s._-]?video)\\b", false),
@@ -146,7 +173,7 @@ public final class MediaBadgeCatalog {
 
     /**
      * 与 {@link #rules()} 一一对应、按需编译并缓存的正则。
-     * 100 条正则的编译成本约 40ms，只在第一次匹配文件名时付出一次。
+     * 127 条正则的编译成本约 55ms，只在第一次匹配文件名时付出一次。
      */
     public static Pattern[] patterns() {
         Pattern[] value = compiled;

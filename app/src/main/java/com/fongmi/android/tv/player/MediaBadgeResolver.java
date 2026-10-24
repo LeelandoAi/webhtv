@@ -36,6 +36,7 @@ public final class MediaBadgeResolver {
     private static final String[] EXTENSIONS = {"mkv", "mp4", "m4v", "webm", "mov", "avi", "flv", "ts", "m2ts", "wmv", "mpg", "mpeg", "3gp", "ogv"};
 
     /** 分类徽标牌键，直接对应 drawable-nodpi 里的成品图形。 */
+    private static final String P_RES_8K = "gr_8k";
     private static final String P_RES_4K = "gr_4k";
     private static final String P_RES_1440P = "gr_1440p";
     private static final String P_RES_1080P = "gr_1080p";
@@ -50,9 +51,11 @@ public final class MediaBadgeResolver {
     private static final String P_DR_HDR = "gv_hdr";
     private static final String P_DR_HLG = "gv_hlg";
     private static final String P_DR_10BIT = "gv_10bit";
+    private static final String P_DR_12BIT = "gv_12bit";
     private static final String P_CODEC_HEVC = "ge_hevc";
     private static final String P_CODEC_AVC = "ge_avc";
     private static final String P_CODEC_AV1 = "ge_av1";
+    private static final String P_CODEC_VVC = "ge_vvc";
     private static final String P_AUDIO_DTS_X = "ga_dts_x";
     private static final String P_AUDIO_DTS_X_HD_MA = "ga_dts_x_hd_ma";
     private static final String P_AUDIO_DTS_X_HD = "ga_dts_x_hd";
@@ -67,10 +70,14 @@ public final class MediaBadgeResolver {
     private static final String P_AUDIO_AAC = "ga_aac";
     private static final String P_AUDIO_FLAC = "ga_flac";
     private static final String P_AUDIO_OPUS = "ga_opus";
+    private static final String P_AUDIO_LPCM = "ga_lpcm";
     private static final String P_CH_7_1 = "gc_7_1";
     private static final String P_CH_6_1 = "gc_6_1";
     private static final String P_CH_5_1 = "gc_5_1";
     private static final String P_CH_2_0 = "gc_2_0";
+    private static final String P_CH_7_1_4 = "gc_7_1_4";
+    private static final String P_CH_5_1_4 = "gc_5_1_4";
+    private static final String P_CH_5_1_2 = "gc_5_1_2";
 
     /** 运行时能证明事实的组：这些组先看运行时，只有拿不到时才用文件名兜底。 */
     private static final Set<Group> RUNTIME_GROUPS = EnumSet.of(Group.RESOLUTION, Group.DYNAMIC_RANGE, Group.VIDEO_CODEC, Group.AUDIO, Group.CHANNELS);
@@ -127,28 +134,32 @@ public final class MediaBadgeResolver {
                 return 0;
             case DYNAMIC_RANGE:
                 return 1;
-            case MEDIA_SOURCE:
+            case VIDEO_TECH:
                 return 2;
-            case QUALITY:
+            case MEDIA_SOURCE:
                 return 3;
-            case VIDEO_CODEC:
+            case QUALITY:
                 return 4;
-            case AUDIO:
+            case EDITION:
                 return 5;
-            case CHANNELS:
+            case VIDEO_CODEC:
                 return 6;
-            case FRAME_RATE:
+            case AUDIO:
                 return 7;
-            case BITRATE:
+            case CHANNELS:
                 return 8;
-            case SPECIAL_TAG:
+            case FRAME_RATE:
                 return 9;
-            case IMAX:
+            case BITRATE:
                 return 10;
-            case STREAMING:
+            case SPECIAL_TAG:
                 return 11;
-            default:
+            case IMAX:
                 return 12;
+            case STREAMING:
+                return 13;
+            default:
+                return 14;
         }
     }
 
@@ -214,6 +225,7 @@ public final class MediaBadgeResolver {
         int height = video.height;
         if (width <= 0 || height <= 0) return null;
         int longSide = Math.max(width, height);
+        if (longSide >= 7000) return new MediaBadge("", Group.RESOLUTION, P_RES_8K);
         if (longSide >= 3840) return new MediaBadge("", Group.RESOLUTION, P_RES_4K);
         if (longSide >= 2560) return new MediaBadge("", Group.RESOLUTION, P_RES_1440P);
         if (longSide >= 1920) return new MediaBadge("", Group.RESOLUTION, P_RES_1080P);
@@ -236,8 +248,10 @@ public final class MediaBadgeResolver {
         if (color.colorTransfer == C.COLOR_TRANSFER_ST2084) return new MediaBadge("", Group.DYNAMIC_RANGE, P_DR_HDR10);
         if (color.colorTransfer == C.COLOR_TRANSFER_HLG) return new MediaBadge("", Group.DYNAMIC_RANGE, P_DR_HLG);
         if (ColorInfo.isTransferHdr(color)) return new MediaBadge("", Group.DYNAMIC_RANGE, P_DR_HDR);
-        // SDR 视频不单独占用一枚徽标，只有高位深时补一枚 10bit。
-        if (color.lumaBitdepth >= 10 || color.chromaBitdepth >= 10) return new MediaBadge("", Group.DYNAMIC_RANGE, P_DR_10BIT);
+        // SDR 视频不单独占用一枚徽标，只有高位深时补一枚位深牌。
+        int bitdepth = Math.max(color.lumaBitdepth, color.chromaBitdepth);
+        if (bitdepth >= 12) return new MediaBadge("", Group.DYNAMIC_RANGE, P_DR_12BIT);
+        if (bitdepth >= 10) return new MediaBadge("", Group.DYNAMIC_RANGE, P_DR_10BIT);
         return null;
     }
 
@@ -252,6 +266,7 @@ public final class MediaBadgeResolver {
         if (value.contains("hev1") || value.contains("hvc1") || value.contains("hevc") || value.contains("h265")) return new MediaBadge("", Group.VIDEO_CODEC, P_CODEC_HEVC);
         if (value.contains("avc") || value.contains("h264")) return new MediaBadge("", Group.VIDEO_CODEC, P_CODEC_AVC);
         if (value.contains("av01") || value.contains("av1")) return new MediaBadge("", Group.VIDEO_CODEC, P_CODEC_AV1);
+        if (value.contains("vvc") || value.contains("h266") || value.contains("h.266") || value.contains("x266")) return new MediaBadge("", Group.VIDEO_CODEC, P_CODEC_VVC);
         if (value.contains("vp09") || value.contains("vp9")) return new MediaBadge("VP9", Group.VIDEO_CODEC, null);
         if (value.contains("vp08") || value.contains("vp8")) return new MediaBadge("VP8", Group.VIDEO_CODEC, null);
         if (value.contains("mp4v") || value.contains("mpeg2") || value.contains("mpeg4")) return new MediaBadge("MPEG-4", Group.VIDEO_CODEC, null);
@@ -337,6 +352,8 @@ public final class MediaBadgeResolver {
                 return P_AUDIO_FLAC;
             case "Opus":
                 return P_AUDIO_OPUS;
+            case "PCM":
+                return P_AUDIO_LPCM;
             default:
                 return null;
         }
@@ -352,6 +369,12 @@ public final class MediaBadgeResolver {
                 return P_CH_5_1;
             case "2.0":
                 return P_CH_2_0;
+            case "7.1.4":
+                return P_CH_7_1_4;
+            case "5.1.4":
+                return P_CH_5_1_4;
+            case "5.1.2":
+                return P_CH_5_1_2;
             default:
                 return null;
         }
