@@ -99,10 +99,13 @@
 
 ## 6. 交付坐标
 
-- 合并提交：（由 `task_guard.sh finish` 在 `MERGE_HEAD` 在场时生成，双亲 `11be83da8b` + `8322438787`）见下方「回填」。
-- recovery tag：见下方「回填」。
-- 推送：`dev1` → `origin/dev1`。
-- PR：创建到 `beta`（只创建不合并）。
-- 拉取：`git fetch origin --prune --tags`。
+- 合并提交：`3cfe93f389615bb32e00540afe23c66b1ec160e1`（双亲 `11be83da8b345f51a9615bbd111f84f420fe7b91` + `8322438787d8f3e769ef244308d634dbd72d8307`），由 `task_guard.sh finish` 在 `MERGE_HEAD` 在场时生成。
+- recovery tag：`recovery/C104-BETA-MERGE-DEV1-OSD-20261025/20261024181204-3cfe93f38961`（本地，按约定不推送）。
+- 推送：`dev1` → `origin/dev1`，`39e1b4a0d4..3cfe93f389`，成功；推送后 `HEAD == origin/dev1`。
+- PR：`dev1` → `beta`，**#487**（`https://github.com/Silent1566/webhtv/pull/487`，OPEN，只创建不合并）。
+  - 说明：#487 原为 C103 建立、head 同为 `dev1` 的未合并 PR；本次提交已把它的 head 推进到 `3cfe93f389`，GitHub 不接受对同一 head/base 再开新 PR（`a pull request for branch "dev1" into branch "beta" already exists`），因此改为**就地更新** #487 的标题与正文为 C104 内容，而不是另开重复 PR。
+- 拉取：`git fetch origin --prune --tags` 已执行。tag 更新中出现若干 `would clobber existing tag`（本地已存在同名 `v5.5.2-sdk28-*` 标签，远端重写），按「不移动已发布标签」原则未强制覆盖；新增 `v5.6.0-beta-202610241939`。拉取后 `origin/dev1 = 3cfe93f389`（与本地一致）、`origin/beta = 8322438787`（已全部并入 HEAD，`git merge-base --is-ancestor origin/beta HEAD` 成立）、`origin/dev4 = 306b823dc7`。
 
 ### 回填（提交后补记）
+
+- 2026-10-25 02:25（Asia/Shanghai）：以上交付坐标已核对并回填。合并提交、recovery tag、推送、PR（#487 更新）、远端拉取全部完成；`dev1` 与 `origin/dev1` 同步，工作区干净。
