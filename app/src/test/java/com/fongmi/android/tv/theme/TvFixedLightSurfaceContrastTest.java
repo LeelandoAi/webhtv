@@ -53,37 +53,17 @@ public class TvFixedLightSurfaceContrastTest {
     private static final double LIGHT_SURFACE_LUMINANCE = 0.6;
 
     /**
-     * Layouts that carry the same defect class but are <em>not</em> part of this fix.
+     * Layouts exempt from this guard, one reason per entry, no empty slots.
      *
-     * <p>The exit-confirm dialog above was the layout the user reported. The files below came
-     * out of the first full run of this guard (2026-10-24) and are the same defect - a
-     * palette-following foreground on a drawable whose fill is a literal that never changes
-     * - on screens nobody reported. Each needs its own visual review and its own task, so they
-     * are listed here instead of being silently repainted inside an unrelated change; this
-     * guard starts covering a file the moment its entry is removed. The ratio in each line is
-     * the worst of the day and night tables, as the guard measured it.
-     *
-     * <ul>
-     *   <li>{@code dialog_ad_block_stats.xml}: twelve statistic labels,
-     *       {@code ?attr/colorOnSurfaceVariant} on {@code shape_ad_stats_content} ({@code #FAFBFC}), 1.31:1.</li>
-     *   <li>{@code adapter_ad_stats_item.xml}: {@code ?attr/colorOnSurfaceVariant} on
-     *       {@code selector_ad_stats_item} ({@code #00FFFFFF} / {@code #E8F0FE}), 1.31:1.</li>
-     *   <li>{@code adapter_mpv_config_profile.xml}: {@code ?attr/colorOnSurface} and
-     *       {@code ?attr/colorOnSurfaceVariant} on {@code selector_mpv_profile_card}
-     *       ({@code #FAFBFC} / {@code #F4F8FF}), 1.13:1 / 1.49:1, and {@code ?attr/colorPrimary}
-     *       on the {@code shape_mpv_active_badge} fill {@code #E8F0FE}, 1.50:1.</li>
-     *   <li>{@code dialog_ai_recommendation_info.xml}: {@code ?attr/colorPrimary} on
-     *       {@code shape_recommendation_source_chip} ({@code #E8F0FE}), 1.50:1. The chip's own
-     *       comment already concedes the light fill is deliberate, so its text has to stop
-     *       following the palette the same way the exit-confirm button did.</li>
-     * </ul>
+     * <p>It was non-empty for exactly one day: the first full run of this guard on 2026-10-24
+     * found the same defect on ten more screens (ad-block stats, the MPV profile card, the AI
+     * recommendation chips, the CSP step buttons, the MPV config close buttons and the GitHub
+     * proxy row). Those were then fixed in the same change as the exit-confirm dialog, so the
+     * list is empty again and every layout in all three source sets is covered by
+     * {@link #paletteForegroundsStayReadableOnFixedLightSurfaces()}. Add an entry only with a
+     * reason that still holds.
      */
-    private static final String[] PENDING_LAYOUTS = {
-            "dialog_ad_block_stats.xml",
-            "adapter_ad_stats_item.xml",
-            "adapter_mpv_config_profile.xml",
-            "dialog_ai_recommendation_info.xml",
-    };
+    private static final String[] EXEMPT_LAYOUTS = {};
 
     /**
      * Layouts owned by the Lab module, which pins {@code colorOnSurface} to
@@ -97,7 +77,16 @@ public class TvFixedLightSurfaceContrastTest {
 
     private static final Pattern TAG = Pattern.compile("<(/?)([A-Za-z0-9_.]+)((?:\"[^\"]*\"|[^>\"])*?)(/?)>", Pattern.DOTALL);
     private static final Pattern BACKGROUND = Pattern.compile("(?:android:background|app:cardBackgroundColor|android:cardBackgroundColor)=\"([^\"]+)\"");
-    private static final Pattern TEXT_COLOR = Pattern.compile("android:textColor=\"([^\"]+)\"");
+    /**
+     * Every attribute that paints a foreground glyph on the element's own background.
+     *
+     * <p>{@code android:tint} matters for the icon-only buttons ({@code ic_close}) whose colour
+     * comes from the drawable tint rather than from a text colour, and the two tab attributes
+     * matter because the ad-stats {@code TabLayout} carries its own fixed light fill.
+     */
+    private static final Pattern FOREGROUND = Pattern.compile(
+            "(?:android:textColor|android:textColorHint|android:tint|app:tint"
+                    + "|app:tabTextColor|app:tabSelectedTextColor)=\"([^\"]+)\"");
     private static final Pattern SOLID = Pattern.compile("<solid\\s+android:color=\"([^\"]+)\"");
     private static final Pattern GRADIENT = Pattern.compile("android:(?:startColor|endColor|centerColor)=\"([^\"]+)\"");
     private static final Pattern COLOR_ENTRY = Pattern.compile("<color name=\"([^\"]+)\">([^<]+)</color>");
@@ -191,15 +180,58 @@ public class TvFixedLightSurfaceContrastTest {
         return null;
     }
 
-    /** The day and night values a {@code ?attr/} foreground resolves to, or null when either is unknown. */
-    private static String[] paletteColors(String value) {
-        if (!value.startsWith("?attr/")) return null;
-        String color = STYLE_COLORS.get(value.substring("?attr/".length()));
-        if (color == null || !color.startsWith("@color/")) return null;
-        String day = literalOf(color.substring("@color/".length()), DAY, false);
-        String night = literalOf(color.substring("@color/".length()), NIGHT, true);
-        if (day == null || night == null) return null;
-        return new String[]{day, night};
+    /**
+     * The colours a foreground paints in each table, or {@code null} when the guard cannot say.
+     *
+     * <p>Both kinds of palette-following foreground matter: a bare {@code ?attr/} role, and an
+     * {@code @color/} selector that is state-aware and whose states point at such a role (the
+     * ad-block labels used {@code @color/dialog_outlined_button_text}, whose every state resolves
+     * to {@code ?attr/colorPrimary}). Resolution therefore descends through selectors and theme
+     * attributes instead of stopping at the outer resource name.
+     *
+     * <p>A foreground that resolves to the <em>same</em> literal in both tables is deliberately
+     * reported as {@code null}: a palette-independent foreground on a fixed light surface is
+     * exactly the fix this guard asks for, not a defect.
+     */
+    @SuppressWarnings("unchecked")
+    private static List<String>[] foregroundColors(String value) {
+        List<String> day = new ArrayList<>();
+        List<String> night = new ArrayList<>();
+        resolve(value, DAY, false, day, new HashMap<>());
+        resolve(value, NIGHT, true, night, new HashMap<>());
+        if (day.isEmpty() || night.isEmpty()) return null;
+        // Identical literals in both tables: palette-independent, i.e. exactly the desired fix.
+        if (new java.util.TreeSet<>(day).equals(new java.util.TreeSet<>(night))) return null;
+        return new List[]{day, night};
+    }
+
+    private static void resolve(String value, Map<String, String> table, boolean night, List<String> out, Map<String, String> seen) {
+        if (value == null || seen.put(value, value) != null) return;
+        if (value.startsWith("#")) {
+            out.add(value);
+            return;
+        }
+        if (value.startsWith("?attr/")) {
+            String color = STYLE_COLORS.get(value.substring("?attr/".length()));
+            if (color != null) resolve(color, table, night, out, seen);
+            return;
+        }
+        if (value.startsWith("@android:color/")) return;
+        if (!value.startsWith("@color/")) return;
+        String name = value.substring("@color/".length());
+        String literal = table.get(name);
+        if (literal != null) {
+            resolve(literal, table, night, out, seen);
+            return;
+        }
+        for (String directory : new String[]{"src/main/res/color", "src/leanback/res/color", "src/mobile/res/color"}) {
+            String source = night ? readIfExists(directory + "-night/" + name + ".xml") : null;
+            if (source == null) source = readIfExists(directory + "/" + name + ".xml");
+            if (source == null) continue;
+            Matcher matcher = SELECTOR_COLOR.matcher(withoutComments(source));
+            while (matcher.find()) resolve(matcher.group(1), table, night, out, seen);
+            return;
+        }
     }
 
     private static double luminance(String hex) {
@@ -243,6 +275,28 @@ public class TvFixedLightSurfaceContrastTest {
             out.append(String.format(Locale.ROOT, "%02X", Math.round(front * a + back * (1 - a))));
         }
         return out.toString();
+    }
+
+    /**
+     * The fills of one background value: a {@code @drawable/} shape or selector, or a
+     * {@code @color/} literal painted with {@code android:background}.
+     *
+     * <p>The colour form matters: the ad-stats log page lays its column headers and filter
+     * buttons on a solid {@code @color/} band rather than on a drawable. That band used to be
+     * {@code @color/webhtv_color_scrim} (translucent black over the fixed light panel), which
+     * no drawable walk can see, so the headers were measured against the panel underneath and
+     * looked fine while the band on screen was mid-grey. It is now a fixed light literal, and
+     * this branch is what keeps it in the guard.
+     */
+    private static List<String> surfaceFills(String background) {
+        if (background == null) return null;
+        if (background.startsWith("@color/")) {
+            String literal = fixedLiteral(background.substring("@color/".length()));
+            if (literal == null || alpha(literal) < 0x66) return null;
+            return List.of(compositeOver(literal, "#101418"));
+        }
+        if (!background.startsWith("@drawable/")) return null;
+        return fixedFills(background.substring("@drawable/".length()));
     }
 
     /**
@@ -313,7 +367,7 @@ public class TvFixedLightSurfaceContrastTest {
     public void paletteForegroundsStayReadableOnFixedLightSurfaces() throws Exception {
         loadTables();
         List<Path> layouts = new ArrayList<>();
-        for (String directory : new String[]{"src/leanback/res/layout", "src/main/res/layout"}) {
+        for (String directory : new String[]{"src/leanback/res/layout", "src/main/res/layout", "src/mobile/res/layout"}) {
             Path base = root().resolve(directory);
             if (!Files.isDirectory(base)) continue;
             try (var paths = Files.walk(base)) {
@@ -361,6 +415,19 @@ public class TvFixedLightSurfaceContrastTest {
         assertEquals("@drawable/selector_exit_confirm_secondary", hits.get(0)[1]);
         assertTrue("the probe must reproduce the unreadable ratio", Double.parseDouble(hits.get(0)[2]) < MIN_CONTRAST);
 
+        // The ad-block stats found on the second sweep: a state-aware @color/ selector whose states are
+        // palette roles, plus a drawable tint instead of a text colour. Both shapes must be caught.
+        String selectorDriven = "<LinearLayout android:background=\"@drawable/shape_ad_stats_content\">"
+                + "<TextView android:textColor=\"@color/dialog_outlined_button_text\" /></LinearLayout>";
+        List<String[]> selectorHits = inspect(selectorDriven);
+        assertFalse("a palette-following @color/ selector must be caught too", selectorHits.isEmpty());
+        assertTrue("the selector probe must reproduce the unreadable ratio",
+                Double.parseDouble(selectorHits.get(0)[2]) < MIN_CONTRAST);
+
+        String tinted = "<LinearLayout android:background=\"@drawable/selector_mpv_icon_button\">"
+                + "<ImageView android:tint=\"?attr/colorOnSurfaceVariant\" /></LinearLayout>";
+        assertFalse("a palette-following drawable tint must be caught", inspect(tinted).isEmpty());
+
         // The mirror of the same markup: a palette-independent dark foreground must be ignored here.
         String alreadyCorrect = "<LinearLayout android:background=\"@drawable/selector_exit_confirm_secondary\">"
                 + "<TextView android:textColor=\"@color/exit_confirm_secondary_text\" /></LinearLayout>";
@@ -376,18 +443,37 @@ public class TvFixedLightSurfaceContrastTest {
     public void fixedLightPanelsKeepPaletteIndependentForegrounds() throws Exception {
         loadTables();
         String[][] expectations = {
-                {"src/leanback/res/layout/dialog_exit_confirm.xml", "selector_exit_confirm_secondary"},
+                {"src/leanback/res/layout/dialog_exit_confirm.xml", "@drawable/selector_exit_confirm_secondary",
+                        "@color/exit_confirm_secondary_text"},
+                {"src/leanback/res/layout/adapter_ad_block_log.xml", "@drawable/selector_ad_stats_item", "@color/fixed_light_focus_text"},
+                {"src/leanback/res/layout/adapter_ad_stats_item.xml", "@drawable/selector_ad_stats_item", "@color/fixed_light_focus_text"},
+                {"src/leanback/res/layout/dialog_ad_block_stats.xml", "@drawable/shape_ad_stats_content", "@color/fixed_light_focus_text"},
+                // The same dialog's log page: a solid @color/ band, not a drawable, so it needs the
+                // colour branch of surfaceFills - and its headers plus its eight filter buttons.
+                {"src/leanback/res/layout/dialog_ad_block_stats.xml", "@color/fixed_light_band", "@color/fixed_light_focus_text"},
+                {"src/main/res/layout/adapter_mpv_config_profile.xml", "@drawable/selector_mpv_profile_card", "@color/fixed_light_focus_text"},
+                {"src/main/res/layout/dialog_ai_recommendation_info.xml", "@drawable/shape_recommendation_source_chip", "@color/fixed_light_accent"},
+                {"src/main/res/layout/dialog_custom_csp.xml", "@drawable/selector_dialog_step_button", "@color/fixed_light_focus_text"},
+                {"src/main/res/layout/dialog_mpv_config_create.xml", "@drawable/selector_mpv_icon_button", "@color/fixed_light_focus_icon"},
+                {"src/main/res/layout/dialog_mpv_config_manager.xml", "@drawable/selector_mpv_icon_button", "@color/fixed_light_focus_icon"},
+                {"src/main/res/layout/dialog_mpv_config_rename.xml", "@drawable/selector_mpv_icon_button", "@color/fixed_light_focus_icon"},
+                {"src/mobile/res/layout/adapter_github_proxy.xml", "@drawable/selector_custom_csp_item", "@color/fixed_light_focus_text"},
+                {"src/leanback/res/layout/adapter_ad_rule.xml", "@drawable/selector_dialog_switch", "@color/fixed_light_focus_icon"},
+                {"src/main/res/layout/adapter_custom_csp.xml", "@drawable/selector_dialog_switch", "@color/fixed_light_focus_icon"},
+                {"src/main/res/layout/dialog_update_settings.xml", "@drawable/selector_dialog_step_button", "@color/fixed_light_focus_icon"},
+                {"src/leanback/res/layout/dialog_update.xml", "@drawable/selector_dialog_step_button", "@color/fixed_light_focus_icon"},
+                {"src/mobile/res/layout/adapter_github_proxy.xml", "@drawable/selector_dialog_switch", "@color/fixed_light_error"},
         };
         for (String[] expectation : expectations) {
             String source = readIfExists(expectation[0]);
             assertTrue(expectation[0] + " is missing", source != null);
-            assertTrue(expectation[0] + " must still paint its secondary button with " + expectation[1],
+            assertTrue(expectation[0] + " must still paint its surface with " + expectation[1],
                     source.contains(expectation[1]));
-            assertTrue(expectation[0] + " must paint the secondary button with the fixed"
-                            + " @color/exit_confirm_secondary_text selector, not a palette role",
-                    source.contains("@color/exit_confirm_secondary_text"));
+            assertTrue(expectation[0] + " must paint that surface with the fixed " + expectation[2]
+                            + " foreground, not a palette role",
+                    source.contains(expectation[2]));
             for (String[] hit : inspect(source)) {
-                if (!expectation[1].equals(hit[1].substring("@drawable/".length()))) continue;
+                if (!expectation[1].equals(hit[1])) continue;
                 fail(expectation[0] + " must not paint " + hit[0] + " on " + hit[1]
                         + " (worst " + ratio(hit[2]) + ", day " + ratio(hit[3]) + ", night " + ratio(hit[4]) + ")");
             }
@@ -401,7 +487,11 @@ public class TvFixedLightSurfaceContrastTest {
     @Test
     public void theFixedLightSurfacesAreStillPaletteIndependentAndLight() throws Exception {
         loadTables();
-        for (String drawable : new String[]{"selector_exit_confirm_secondary"}) {
+        for (String drawable : new String[]{
+                "selector_exit_confirm_secondary", "selector_ad_stats_item", "shape_ad_stats_content",
+                "selector_mpv_profile_card", "shape_mpv_active_badge", "shape_recommendation_source_chip",
+                "shape_douban_rating_chip_light", "selector_dialog_step_button", "selector_mpv_icon_button",
+                "selector_custom_csp_item", "selector_dialog_switch"}) {
             List<String> fills = fixedFills(drawable);
             assertTrue(drawable + " must have no palette-following fill, or the guard is moot", fills != null);
             assertTrue(drawable + " must be light in both tables",
@@ -414,7 +504,7 @@ public class TvFixedLightSurfaceContrastTest {
     }
 
     private static boolean isExcluded(String name) {
-        for (String pending : PENDING_LAYOUTS) if (pending.equals(name)) return true;
+        for (String exempt : EXEMPT_LAYOUTS) if (exempt.equals(name)) return true;
         for (String lab : LAB_LAYOUTS) if (lab.equals(name)) return true;
         return false;
     }
@@ -438,10 +528,18 @@ public class TvFixedLightSurfaceContrastTest {
             String own = backgroundMatcher.find() ? backgroundMatcher.group(1) : null;
             if (!selfClosing) backgrounds.push(own == null ? "" : own);
 
-            Matcher colorMatcher = TEXT_COLOR.matcher(attributes);
-            if (!colorMatcher.find()) continue;
-            String[] palette = paletteColors(colorMatcher.group(1));
-            if (palette == null) continue;
+            Matcher colorMatcher = FOREGROUND.matcher(attributes);
+            List<String[]> found = new ArrayList<>();
+            List<String> labels = new ArrayList<>();
+            while (colorMatcher.find()) {
+                List<String>[] palette = foregroundColors(colorMatcher.group(1));
+                if (palette == null) continue;
+                found.add(new String[]{palette[0].get(0), palette[1].get(0)});
+                labels.add(colorMatcher.group(1));
+                found.set(found.size() - 1, new String[]{
+                        String.join(",", palette[0]), String.join(",", palette[1])});
+            }
+            if (found.isEmpty()) continue;
 
             String nearest = own != null && !own.isEmpty() ? own : null;
             if (nearest == null) {
@@ -452,16 +550,23 @@ public class TvFixedLightSurfaceContrastTest {
                     }
                 }
             }
-            if (nearest == null || !nearest.startsWith("@drawable/")) continue;
-            List<String> fills = fixedFills(nearest.substring("@drawable/".length()));
+            List<String> fills = surfaceFills(nearest);
             if (fills == null) continue;
             boolean light = fills.stream().allMatch(fill -> luminance(fill) >= LIGHT_SURFACE_LUMINANCE);
             if (!light) continue;
-            double day = fills.stream().mapToDouble(fill -> contrast(palette[0], fill)).min().orElse(Double.MAX_VALUE);
-            double night = fills.stream().mapToDouble(fill -> contrast(palette[1], fill)).min().orElse(Double.MAX_VALUE);
-            double worst = Math.min(day, night);
-            hits.add(new String[]{colorMatcher.group(1), nearest,
-                    String.valueOf(worst), String.valueOf(day), String.valueOf(night)});
+            for (int index = 0; index < found.size(); index++) {
+                double day = Double.MAX_VALUE;
+                for (String color : found.get(index)[0].split(",")) {
+                    day = Math.min(day, fills.stream().mapToDouble(fill -> contrast(color, fill)).min().orElse(Double.MAX_VALUE));
+                }
+                double night = Double.MAX_VALUE;
+                for (String color : found.get(index)[1].split(",")) {
+                    night = Math.min(night, fills.stream().mapToDouble(fill -> contrast(color, fill)).min().orElse(Double.MAX_VALUE));
+                }
+                double worst = Math.min(day, night);
+                hits.add(new String[]{labels.get(index), nearest,
+                        String.valueOf(worst), String.valueOf(day), String.valueOf(night)});
+            }
         }
         return hits;
     }
