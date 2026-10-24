@@ -424,6 +424,16 @@ public class TvFixedLightSurfaceContrastTest {
         assertTrue("the selector probe must reproduce the unreadable ratio",
                 Double.parseDouble(selectorHits.get(0)[2]) < MIN_CONTRAST);
 
+        // The mobile ad-stats log page: a palette role sitting on the fixed light band rather than
+        // on a drawable. Without this probe the colour branch of surfaceFills could regress to
+        // ignoring @color/ fills and the mobile flavour would silently drift back to 2.37:1.
+        String bandDriven = "<LinearLayout android:background=\"@color/fixed_light_band\">"
+                + "<TextView android:textColor=\"@color/dialog_outlined_button_text\" /></LinearLayout>";
+        List<String[]> bandHits = inspect(bandDriven);
+        assertFalse("a palette-following foreground on a fixed @color/ band must be caught", bandHits.isEmpty());
+        assertTrue("the band probe must reproduce the unreadable ratio",
+                Double.parseDouble(bandHits.get(0)[2]) < MIN_CONTRAST);
+
         String tinted = "<LinearLayout android:background=\"@drawable/selector_mpv_icon_button\">"
                 + "<ImageView android:tint=\"?attr/colorOnSurfaceVariant\" /></LinearLayout>";
         assertFalse("a palette-following drawable tint must be caught", inspect(tinted).isEmpty());
@@ -451,6 +461,11 @@ public class TvFixedLightSurfaceContrastTest {
                 // The same dialog's log page: a solid @color/ band, not a drawable, so it needs the
                 // colour branch of surfaceFills - and its headers plus its eight filter buttons.
                 {"src/leanback/res/layout/dialog_ad_block_stats.xml", "@color/fixed_light_band", "@color/fixed_light_focus_text"},
+
+                // The mobile flavour of the same dialog kept the scrim band for one more cycle: its
+                // twelve column headers and eight filter buttons still drew palette roles on a band
+                // that composites to mid-grey, so the night table painted #A8C7FA on #9D9DA2 (2.37:1).
+                {"src/mobile/res/layout/dialog_ad_block_stats.xml", "@color/fixed_light_band", "@color/fixed_light_focus_text"},
                 {"src/main/res/layout/adapter_mpv_config_profile.xml", "@drawable/selector_mpv_profile_card", "@color/fixed_light_focus_text"},
                 {"src/main/res/layout/dialog_ai_recommendation_info.xml", "@drawable/shape_recommendation_source_chip", "@color/fixed_light_accent"},
                 {"src/main/res/layout/dialog_custom_csp.xml", "@drawable/selector_dialog_step_button", "@color/fixed_light_focus_text"},
