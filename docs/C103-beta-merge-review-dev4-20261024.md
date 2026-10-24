@@ -207,17 +207,17 @@ DSH bash 工具无法写入 `.git`（`FETCH_HEAD`/索引写入报 Permission den
 | 项 | 值 |
 | --- | --- |
 | 合并提交 | `62f0b777d2a11fcd0891cb67474221956cb05c18`（双亲 `96891188510` + `7c725e4d7ee`，5 路径 / +771 −0） |
-| 评审提交 | __REVIEW_COMMIT__ |
-| Recovery tag | __RECOVERY_TAG__ |
-| 推送 | __PUSH__ |
-| PR | __PR__ |
-| 拉取 | __PULL__ |
-| 交付时工作树 | __WORKTREE__ |
+| 评审提交 | `9b0a547eae202bb24ade60cfabc820c2fc500506`（4 路径 / +293 −17：F1 修复 `app/src/mobile/res/layout/dialog_ad_block_stats.xml`、F1-守卫 `app/src/test/java/com/fongmi/android/tv/theme/TvFixedLightSurfaceContrastTest.java`、本评审文档、任务文档更新） |
+| Recovery tag | `recovery/C103-BETA-MERGE-DEV4-20261024/20261024113249-9b0a547eae20`（守卫 `finish` 创建并已单独推送） |
+| 推送 | `git push origin dev4`（`e8551e321ce..9b0a547eae2`，PUSH_EXIT=0）；recovery tag 单独 `git push origin <tag>`（`[new tag]`，TAGPUSH_EXIT=0） |
+| PR | **新建** [PR #488](https://github.com/Silent1566/webhtv/pull/488) dev4 → beta：中文标题与描述，描述含具体改动内容 = 「合并 `origin/beta` `7c725e4d7ee`（6 提交，PR #485/#486 线路：版本卡片调色板修复与 PY-BRIDGE 守卫）+ 评审并修复未推送提交 `96891188510`/`b829d104ef4` 的 mobile 版固定浅底漏改（F1）与守卫盲区（F1-守卫）」；**只创建，不合并** |
+| 拉取 | `git fetch origin --prune --tags`（FETCH_EXIT=0，新增 `v5.6.0-beta-202610240855` 与 1 个历史 recovery tag，dev1 前进）+ `git pull --ff-only origin dev4`（PULL_EXIT=0，`Already up to date.`）；见 §9 |
+| 交付时工作树 | 跟踪文件干净（`git status --porcelain` 为空），`git rev-list --left-right --count origin/dev4...HEAD` = `0 0` |
 
 ## 9. 拉取与文档收尾提交
 
 | 项 | 值 |
 | --- | --- |
-| 拉取命令 | __PULL_CMD__ |
-| 拉取后状态 | __PULL_STATE__ |
+| 拉取命令 | `git fetch origin --prune --tags`（FETCH_EXIT=0）+ `git pull --ff-only origin dev4`（PULL_EXIT=0，`Already up to date.`） |
+| 拉取后状态 | 拉取后 `git rev-list --left-right --count origin/dev4...HEAD` = `0 0`（本地与远端 dev4 完全一致）；HEAD 仍为 `9b0a547eae202bb24ade60cfabc820c2fc500506`；`origin/beta` 仍为 `7c725e4d7ee43ca0a187e420b224b33bb0a39a6a`（本轮拉取时 beta 未前进）；新增的 `v5.6.0-beta-202610240855` tag 与 `origin/dev1` 前进与本次评审无关，仅记录 |
 | 文档收尾提交 | 本节把 §8 的占位符换成实测坐标，属于**提交后才获得的交付 ID 的纯文档回填**，按 AGENTS.md §6「不可避免的 post-commit ID/tag 只能再做一个仅文档的收尾提交」处理：一次仅文档提交（不触发任何构建/测试/研究），随后推送。评审对象与已验证代码在上面的评审提交中已冻结不变 |
