@@ -33,6 +33,7 @@ import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.player.DolbyVisionFormatLabel;
 import com.fongmi.android.tv.player.AudioPlaybackDiagnostics;
 import com.fongmi.android.tv.player.GpuLoadMonitor;
+import com.fongmi.android.tv.player.MediaBadgeCatalog;
 import com.fongmi.android.tv.player.MediaBadgeResolver;
 import com.fongmi.android.tv.player.ijk.IjkDecodePressurePolicy;
 import com.fongmi.android.tv.player.PlayerManager;
@@ -52,8 +53,10 @@ import com.google.android.flexbox.FlexboxLayout;
 import java.text.DecimalFormat;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 public class PlayerOsdController {
 
@@ -419,7 +422,7 @@ public class PlayerOsdController {
         Format video = player.getVideoFormat();
         PlayerEngine.VideoPlaybackDetails details = player.getVideoPlaybackDetails();
         AudioPlaybackDiagnostics.Snapshot audio = player.getAudioPlaybackDiagnostics();
-        List<MediaBadgeResolver.MediaBadge> badges = MediaBadgeResolver.resolve(video, details, audio == null ? null : audio.activeTrack(), player.getUrl());
+        List<MediaBadgeResolver.MediaBadge> badges = MediaBadgeResolver.resolve(video, details, audio == null ? null : audio.activeTrack(), player.getUrl(), source.getTitle());
         if (badges.isEmpty()) {
             mediaBadges.setVisibility(View.GONE);
             mediaBadgeSignature = "";
@@ -427,7 +430,7 @@ public class PlayerOsdController {
         }
         applyMediaBadgePosition();
         StringBuilder signature = new StringBuilder();
-        for (MediaBadgeResolver.MediaBadge badge : badges) signature.append(badge.icon()).append(':').append(badge.plate()).append(':').append(badge.text()).append('|');
+        for (MediaBadgeResolver.MediaBadge badge : badges) signature.append(badge.group()).append(':').append(badge.plate()).append(':').append(badge.text()).append('|');
         String next = signature.toString();
         if (!next.equals(mediaBadgeSignature)) {
             mediaBadgeSignature = next;
@@ -478,9 +481,10 @@ public class PlayerOsdController {
     }
 
     /**
-     * 一个徽标 = 左侧图形 + 右侧事实文本，整块包在一个类别色胶囊里。
-     * 图形优先用随包内置的主流品牌牌（离线可用，不会出现首帧空白）；
-     * 没有对应牌时才退回自绘矢量图标。牌已经写明的字样不会在右侧重复。
+     * 一个徽标 = 成品牌 + 事实文本，整块包在分组色胶囊里。
+     * 图形全部来自随包内置的参考实现牌（离线可用，不会出现首帧空白）；
+     * 没有对应牌的纯数值事实（帧率、码率、容器、少见编码）只显示文本，
+     * 不再用语义无关的自绘占位图标，避免「图标和内容不搭边」。
      */
     private View createMediaBadge(MediaBadgeResolver.MediaBadge badge) {
         Context context = root.getContext();
@@ -492,22 +496,20 @@ public class PlayerOsdController {
         FlexboxLayout.LayoutParams params = new FlexboxLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         params.setMargins(0, dp(2), dp(4), 0);
         view.setLayoutParams(params);
-        view.setBackground(categoryBackground(badge.icon()));
+        view.setBackground(categoryBackground(badge.group()));
         view.setPadding(dp(6), dp(2), dp(6), dp(2));
 
-        ImageView icon = new ImageView(context);
-        LinearLayout.LayoutParams iconParams = hasPlate ? new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(16)) : new LinearLayout.LayoutParams(dp(11), dp(11));
-        if (hasPlate && hasText) iconParams.setMarginEnd(dp(4));
-        icon.setLayoutParams(iconParams);
-        if (hasPlate) {
-            icon.setImageResource(plateResource(badge.plate()));
+        int plate = hasPlate ? plateResource(badge.plate()) : 0;
+        if (plate != 0) {
+            ImageView icon = new ImageView(context);
+            LinearLayout.LayoutParams iconParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(16));
+            if (hasText) iconParams.setMarginEnd(dp(4));
+            icon.setLayoutParams(iconParams);
+            icon.setImageResource(plate);
             icon.setAdjustViewBounds(true);
             icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
-        } else {
-            icon.setImageResource(mediaBadgeIcon(badge.icon()));
-            icon.setColorFilter(0xFFFFFFFF);
+            view.addView(icon);
         }
-        view.addView(icon);
 
         if (hasText) {
             TextView text = new TextView(context);
@@ -523,8 +525,8 @@ public class PlayerOsdController {
     }
 
     /** 类别色胶囊：左侧偏类别色、右侧压暗，既有颜色又保证任意画面下白字可读。 */
-    private GradientDrawable categoryBackground(MediaBadgeResolver.Icon icon) {
-        int color = mediaBadgeColor(icon);
+    private GradientDrawable categoryBackground(MediaBadgeCatalog.Group group) {
+        int color = mediaBadgeColor(group);
         GradientDrawable background = new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, new int[]{withAlpha(color, 0x8A), 0xD9040A12});
         background.setCornerRadius(dp(4));
         background.setStroke(dp(1), withAlpha(color, 0xE6));
@@ -535,87 +537,158 @@ public class PlayerOsdController {
         return (color & 0x00FFFFFF) | (alpha << 24);
     }
 
-    /** 每个类别的主题色，徽标胶囊与兜底图标共用。 */
-    private static int mediaBadgeColor(MediaBadgeResolver.Icon icon) {
-        switch (icon) {
+    /**
+     * 每个分组的主题色。参考实现的 JSON 只给了黑白边框，
+     * 这里的彩色是本项目自己分的组，让一行里「分辨率/画质/编码/音轨/来源」一眼可分。
+     */
+    private static int mediaBadgeColor(MediaBadgeCatalog.Group group) {
+        switch (group) {
             case RESOLUTION:
                 return 0xFF5A8DEE;
             case DYNAMIC_RANGE:
                 return 0xFF7B61FF;
             case VIDEO_CODEC:
                 return 0xFF14B8A6;
+            case AUDIO:
+                return 0xFFEF4444;
+            case CHANNELS:
+                return 0xFFF97316;
             case FRAME_RATE:
                 return 0xFF10B981;
             case BITRATE:
                 return 0xFFF59E0B;
-            case AUDIO:
-                return 0xFFEF4444;
+            case CONTAINER:
+                return 0xFF64748B;
+            case MEDIA_SOURCE:
+                return 0xFF0EA5E9;
+            case QUALITY:
+                return 0xFFA855F7;
+            case SPECIAL_TAG:
+                return 0xFFEC4899;
+            case IMAX:
+                return 0xFF2563EB;
+            case STREAMING:
+                return 0xFFDC2626;
             default:
                 return 0xFF64748B;
         }
     }
 
-    /** 牌资源映射：新增牌时只改这里。 */
+    /**
+     * 牌资源映射：键与 {@link MediaBadgeCatalog} 的 plate 一一对应，
+     * 资源名规则为 {@code badge_<plate>}。这里写成显式常量引用，
+     * 保证 release 的资源压缩不会把只在运行时拼名字的牌删掉。
+     */
     private static int plateResource(String plate) {
-        switch (plate) {
-            case MediaBadgeResolver.PLATE_RES_4K:
-                return R.drawable.badge_resolution_4k;
-            case MediaBadgeResolver.PLATE_RES_1440P:
-                return R.drawable.badge_resolution_1440p;
-            case MediaBadgeResolver.PLATE_RES_1080P:
-                return R.drawable.badge_resolution_1080p;
-            case MediaBadgeResolver.PLATE_RES_720P:
-                return R.drawable.badge_resolution_720p;
-            case MediaBadgeResolver.PLATE_DV:
-                return R.drawable.badge_visual_dolby_vision;
-            case MediaBadgeResolver.PLATE_HDR10:
-                return R.drawable.badge_visual_hdr10;
-            case MediaBadgeResolver.PLATE_HDR:
-                return R.drawable.badge_visual_hdr;
-            case MediaBadgeResolver.PLATE_HLG:
-                return R.drawable.badge_visual_hlg;
-            case MediaBadgeResolver.PLATE_CODEC_HEVC:
-                return R.drawable.badge_encoder_hevc;
-            case MediaBadgeResolver.PLATE_CODEC_AVC:
-                return R.drawable.badge_encoder_avc;
-            case MediaBadgeResolver.PLATE_CODEC_AV1:
-                return R.drawable.badge_encoder_av1;
-            case MediaBadgeResolver.PLATE_AUDIO_AAC:
-                return R.drawable.badge_audio_aac;
-            case MediaBadgeResolver.PLATE_AUDIO_FLAC:
-                return R.drawable.badge_audio_flac;
-            case MediaBadgeResolver.PLATE_AUDIO_OPUS:
-                return R.drawable.badge_audio_opus;
-            case MediaBadgeResolver.PLATE_AUDIO_DD:
-                return R.drawable.badge_audio_dolby_digital;
-            case MediaBadgeResolver.PLATE_AUDIO_DDP:
-                return R.drawable.badge_audio_dolby_digital_plus;
-            case MediaBadgeResolver.PLATE_AUDIO_TRUEHD:
-                return R.drawable.badge_audio_dolby_truehd;
-            case MediaBadgeResolver.PLATE_AUDIO_DTS:
-                return R.drawable.badge_audio_dts;
-            default:
-                return R.drawable.badge_audio_aac;
-        }
+        Integer resource = PLATES.get(plate);
+        return resource == null ? 0 : resource;
     }
 
-    private static int mediaBadgeIcon(MediaBadgeResolver.Icon icon) {
-        switch (icon) {
-            case RESOLUTION:
-                return R.drawable.ic_badge_resolution;
-            case DYNAMIC_RANGE:
-                return R.drawable.ic_badge_dynamic_range;
-            case VIDEO_CODEC:
-                return R.drawable.ic_badge_video_codec;
-            case FRAME_RATE:
-                return R.drawable.ic_badge_frame_rate;
-            case BITRATE:
-                return R.drawable.ic_badge_bitrate;
-            case AUDIO:
-                return R.drawable.ic_badge_audio;
-            default:
-                return R.drawable.ic_badge_container;
-        }
+    private static final Map<String, Integer> PLATES = plates();
+
+    private static Map<String, Integer> plates() {
+        Map<String, Integer> map = new HashMap<>();
+        map.put("gst_seadex", R.drawable.badge_gst_seadex);
+        map.put("gst_hybrid", R.drawable.badge_gst_hybrid);
+        map.put("gst_criterion", R.drawable.badge_gst_criterion);
+        map.put("gst_proper", R.drawable.badge_gst_proper);
+        map.put("gst_repack", R.drawable.badge_gst_repack);
+        map.put("gst_remastered", R.drawable.badge_gst_remastered);
+        map.put("gst_open_matte", R.drawable.badge_gst_open_matte);
+        map.put("gst_regraded", R.drawable.badge_gst_regraded);
+        map.put("gst_directors_cut", R.drawable.badge_gst_directors_cut);
+        map.put("gst_extended", R.drawable.badge_gst_extended);
+        map.put("gst_uncut", R.drawable.badge_gst_uncut);
+        map.put("gst_uncensored", R.drawable.badge_gst_uncensored);
+        map.put("gst_black_and_white", R.drawable.badge_gst_black_and_white);
+        map.put("gst_true_hue", R.drawable.badge_gst_true_hue);
+        map.put("gst_theatrical", R.drawable.badge_gst_theatrical);
+        map.put("gms_remux_1", R.drawable.badge_gms_remux_1);
+        map.put("gms_remux_2", R.drawable.badge_gms_remux_2);
+        map.put("gms_remux_3", R.drawable.badge_gms_remux_3);
+        map.put("gms_blu_ray_1", R.drawable.badge_gms_blu_ray_1);
+        map.put("gms_blu_ray_2", R.drawable.badge_gms_blu_ray_2);
+        map.put("gms_blu_ray_3", R.drawable.badge_gms_blu_ray_3);
+        map.put("gms_blu_ray_4", R.drawable.badge_gms_blu_ray_4);
+        map.put("gms_blu_ray_5", R.drawable.badge_gms_blu_ray_5);
+        map.put("gms_blu_ray_6", R.drawable.badge_gms_blu_ray_6);
+        map.put("gms_blu_ray_7", R.drawable.badge_gms_blu_ray_7);
+        map.put("gms_blu_ray_8", R.drawable.badge_gms_blu_ray_8);
+        map.put("gms_web_1", R.drawable.badge_gms_web_1);
+        map.put("gms_web_2", R.drawable.badge_gms_web_2);
+        map.put("gms_web_3", R.drawable.badge_gms_web_3);
+        map.put("gms_web_4", R.drawable.badge_gms_web_4);
+        map.put("gms_web_5", R.drawable.badge_gms_web_5);
+        map.put("gms_web_6", R.drawable.badge_gms_web_6);
+        map.put("gr_4k", R.drawable.badge_gr_4k);
+        map.put("gr_1440p", R.drawable.badge_gr_1440p);
+        map.put("gr_1080p", R.drawable.badge_gr_1080p);
+        map.put("gr_720p", R.drawable.badge_gr_720p);
+        map.put("gr_576p", R.drawable.badge_gr_576p);
+        map.put("gr_480p", R.drawable.badge_gr_480p);
+        map.put("gr_360p", R.drawable.badge_gr_360p);
+        map.put("gr_240p", R.drawable.badge_gr_240p);
+        map.put("gr_144p", R.drawable.badge_gr_144p);
+        map.put("gq_remux", R.drawable.badge_gq_remux);
+        map.put("gq_bluray", R.drawable.badge_gq_bluray);
+        map.put("gq_web_dl", R.drawable.badge_gq_web_dl);
+        map.put("gq_webrip", R.drawable.badge_gq_webrip);
+        map.put("gq_hdrip", R.drawable.badge_gq_hdrip);
+        map.put("gq_hc_hdrip", R.drawable.badge_gq_hc_hdrip);
+        map.put("gq_dvdrip", R.drawable.badge_gq_dvdrip);
+        map.put("gq_hdtv", R.drawable.badge_gq_hdtv);
+        map.put("gq_scr", R.drawable.badge_gq_scr);
+        map.put("gq_tc", R.drawable.badge_gq_tc);
+        map.put("gq_ts", R.drawable.badge_gq_ts);
+        map.put("gq_cam", R.drawable.badge_gq_cam);
+        map.put("imax_imax_enhanced", R.drawable.badge_imax_imax_enhanced);
+        map.put("imax_imax", R.drawable.badge_imax_imax);
+        map.put("gv_dolby_vision_hdr10_plus", R.drawable.badge_gv_dolby_vision_hdr10_plus);
+        map.put("gv_dolby_vision_hdr10", R.drawable.badge_gv_dolby_vision_hdr10);
+        map.put("gv_dolby_vision_hdr", R.drawable.badge_gv_dolby_vision_hdr);
+        map.put("gv_dolby_vision", R.drawable.badge_gv_dolby_vision);
+        map.put("gv_hdr10_plus", R.drawable.badge_gv_hdr10_plus);
+        map.put("gv_hdr10", R.drawable.badge_gv_hdr10);
+        map.put("gv_hdr", R.drawable.badge_gv_hdr);
+        map.put("gv_hlg", R.drawable.badge_gv_hlg);
+        map.put("gv_10bit", R.drawable.badge_gv_10bit);
+        map.put("gv_sdr", R.drawable.badge_gv_sdr);
+        map.put("gv_ai", R.drawable.badge_gv_ai);
+        map.put("ga_dolby_atmos_truehd", R.drawable.badge_ga_dolby_atmos_truehd);
+        map.put("ga_dts_x_hd_ma", R.drawable.badge_ga_dts_x_hd_ma);
+        map.put("ga_dolby_atmos_digital_plus", R.drawable.badge_ga_dolby_atmos_digital_plus);
+        map.put("ga_dts_x_hd", R.drawable.badge_ga_dts_x_hd);
+        map.put("ga_dolby_atmos", R.drawable.badge_ga_dolby_atmos);
+        map.put("ga_dts_x", R.drawable.badge_ga_dts_x);
+        map.put("ga_dolby_truehd", R.drawable.badge_ga_dolby_truehd);
+        map.put("ga_dts_hd_ma", R.drawable.badge_ga_dts_hd_ma);
+        map.put("ga_flac", R.drawable.badge_ga_flac);
+        map.put("ga_dts_hd", R.drawable.badge_ga_dts_hd);
+        map.put("ga_dolby_digital_plus", R.drawable.badge_ga_dolby_digital_plus);
+        map.put("ga_dts_es", R.drawable.badge_ga_dts_es);
+        map.put("ga_dts", R.drawable.badge_ga_dts);
+        map.put("ga_opus", R.drawable.badge_ga_opus);
+        map.put("ga_dolby_digital", R.drawable.badge_ga_dolby_digital);
+        map.put("ga_aac", R.drawable.badge_ga_aac);
+        map.put("gc_7_1", R.drawable.badge_gc_7_1);
+        map.put("gc_6_1", R.drawable.badge_gc_6_1);
+        map.put("gc_5_1", R.drawable.badge_gc_5_1);
+        map.put("gc_2_0", R.drawable.badge_gc_2_0);
+        map.put("ge_av1", R.drawable.badge_ge_av1);
+        map.put("ge_hevc", R.drawable.badge_ge_hevc);
+        map.put("ge_avc", R.drawable.badge_ge_avc);
+        map.put("ge_xvid", R.drawable.badge_ge_xvid);
+        map.put("ge_divx", R.drawable.badge_ge_divx);
+        map.put("gs_peacock", R.drawable.badge_gs_peacock);
+        map.put("gs_netflix", R.drawable.badge_gs_netflix);
+        map.put("gs_prime_video", R.drawable.badge_gs_prime_video);
+        map.put("gs_apple_tv_plus", R.drawable.badge_gs_apple_tv_plus);
+        map.put("gs_disney_plus", R.drawable.badge_gs_disney_plus);
+        map.put("gs_hbo_max", R.drawable.badge_gs_hbo_max);
+        map.put("gs_hulu", R.drawable.badge_gs_hulu);
+        map.put("gs_paramount_plus", R.drawable.badge_gs_paramount_plus);
+        map.put("gs_crunchyroll", R.drawable.badge_gs_crunchyroll);
+        return map;
     }
 
     private void setTextSize(float sp) {
