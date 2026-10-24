@@ -2,11 +2,11 @@
 
 **Recovery anchor**
 
-- 目标：播放器**唤醒控制栏时**显示当前媒体的**可证事实**徽标（分辨率 / HDR / 视频编码 / 帧率 / 码率 / 音频编码+声道+采样率 / 容器），每条徽标为「本地矢量图标 + 文本」；开关进「屏显设置」多选（默认关），位置独立成行四角单选（默认右下角）。
-- 验收：默认开启后不显示任何徽标；打开开关且媒体信息可解析时，在所选角落显示自绘 chip；Exo/MPV/IJK 三引擎均不崩溃、不新增图片资源、不引入任何商标图。
+- 目标：播放器**唤醒控制栏时**显示当前媒体的**可证事实**徽标（分辨率 / HDR / 视频编码 / 帧率 / 码率 / 音频编码+声道+采样率 / 容器），**同一行横排**，每条为「徽标牌位图或本地矢量图标 + 文本 + 类别色胶囊」；开关进「屏显设置」多选（默认关），位置独立成行四角单选（默认右下角）。
+- 验收：默认开启后不显示任何徽标；打开开关且媒体信息可解析时，在所选角落按类别色胶囊横排显示徽标；Exo/MPV/IJK 三引擎均不崩溃。（第三轮起按用户明确授权打包 18 张现成徽标位图，其中含 Dolby / DTS 等注册商标图形，属于**用户已知并接受**的取舍。）
 - Lane/scope：task_guard `osd-media-badges`（mode=standard），base HEAD `4dda4b56b8d67e0cb78e6617f7b0f776591383a9`，branch `dev1`。
 - 回滚：单一逻辑提交，回滚该提交即可完整撤销；新增键 `player_osd_media_badges` / `player_osd_media_badge_position` 未被引用时是惰性偏好项，不会影响旧版本行为。
-- 后续任务：task_guard `osd-badge-icons`（mode=standard，base HEAD `49e5b2c4bc05a5e1e05f2bc18327d1c02079b9f5`）把徽标从「常驻屏显」改为「控制栏可见时展示」并加图标。
+- 后续任务：`osd-badge-icons`（base HEAD `49e5b2c4bc05a5e1e05f2bc18327d1c02079b9f5`）把徽标从「常驻屏显」改为「控制栏可见时展示」并加图标；`osd-badge-plates`（base HEAD `7d4bee6ce1`）改为横排 + 类别色 + 现成徽标牌。
 
 ## 1. 需求与取舍
 
@@ -31,9 +31,12 @@
 
 ## 3. 图标与商标
 
-- **不引入任何第三方图片素材**：社区图标集（含 "4K ULTRA HD"、"Dolby Vision" 字标）属于各项目自有或商标方所有；直接打包有许可与商标风险，也会增加包体。
+- **（第一轮决策，第三轮经用户授权推翻）** 原定不引入任何第三方图片素材：社区图标集（含 "4K ULTRA HD"、"Dolby Vision" 字标）属于各项目自有或商标方所有，直接打包有许可与商标风险。第三轮用户明确表示**忽略许可证顾虑**，要求「用主流现成图标」，因此改为打包 18 张现成徽标位图（仍不引入任何新依赖、运行时零网络请求）。若将来需要回到零第三方素材的方案，删除 `drawable-nodpi/badge_*.webp` 并让 `plateResource(...)` 返回 0 即可退回纯矢量兜底路径。
 - DOLBY、"4K ULTRA HD" 等是注册商标 / 认证字标。本实现只用**中性技术缩写**（`4K`、`1080P`、`HDR10`、`HLG`、`DV.P8`、`HEVC`、`H.264`、`E-AC-3`）做指示性描述，属于对播放内容的客观说明，不做官方认证暗示。
-- 视觉用自绘 chip：`shape_player_osd_badge.xml`（`#66000000` 底 + 3dp 圆角 + `#33FFFFFF` 1dp 描边）+ 10dp 单色矢量图标 + 10sp 白色大写文字。图标是本仓自绘的通用技术符号（画框/对比度圆/胶片/时钟/柱状/喇叭/文件夹），**不使用任何第三方徽标图集**（Xperience `badges/*.webp`、6otho/Epx-Badge 的 `*.svg` 均为第三方非官方分发、含 Dolby/DTS/HDR10+ 注册商标图形且无明确许可，仅作参考不打包）。零位图、零新增依赖、离线可用。
+- 视觉分两层：
+  - **有对应牌的事实**（分辨率 / 动态范围 / 视频编码 / 音频编码）→ 直接显示**现成媒体徽标位图**，见下一节。
+  - **没有对应牌的事实**（帧率 / 码率 / 容器）→ 10dp 自绘单色矢量图标（`ic_badge_frame_rate.xml` / `ic_badge_bitrate.xml` / `ic_badge_container.xml`）+ 10sp 白色大写文字。
+- 两类 chip 共用同一胶囊底色：`PlayerOsdController.categoryBackground(Icon)` 在建运行时生成 `GradientDrawable(LEFT_RIGHT, {withAlpha(categoryColor, 0x8A), 0xD9040A12})` + `setCornerRadius(dp(4))` + 1dp 描边 `withAlpha(categoryColor, 0xE6)`；类别色见 `mediaBadgeColor(Icon)`（分辨率 `#5A8DEE` 蓝 / 动态范围 `#7B61FF` 紫 / 视频编码 `#14B8A6` 青 / 帧率 `#10B981` 绿 / 码率 `#F59E0B` 橙 / 音频 `#EF4444` 红 / 容器 `#64748B` 灰）。旧的 `shape_player_osd_badge.xml` 静态背景已不再使用（文件保留，避免影响既有引用）。
 
 ## 4. 三引擎事实覆盖度
 
@@ -56,13 +59,14 @@
 
 | 文件 | 改动 |
 | --- | --- |
-| `app/src/main/java/com/fongmi/android/tv/player/MediaBadgeResolver.java` | 纯逻辑：`Format` + `VideoPlaybackDetails` + `AudioPlaybackDiagnostics.Track` + url → `List<MediaBadge>`（`record MediaBadge(String text, Icon icon)`，`enum Icon {RESOLUTION,DYNAMIC_RANGE,VIDEO_CODEC,FRAME_RATE,BITRATE,AUDIO,CONTAINER}`），顺序 分辨率→动态范围→视频编码→帧率→码率→音频→容器，去空去重；音频编码经 `AudioPlaybackDiagnostics.codecLabel` 归一，`mp4a.40.x` → `AAC` |
+| `app/src/main/java/com/fongmi/android/tv/player/MediaBadgeResolver.java` | 纯逻辑：`Format` + `VideoPlaybackDetails` + `AudioPlaybackDiagnostics.Track` + url → `List<MediaBadge>`（`public record MediaBadge(String text, Icon icon, String plate)`，`enum Icon {RESOLUTION,DYNAMIC_RANGE,VIDEO_CODEC,FRAME_RATE,BITRATE,AUDIO,CONTAINER}`），顺序 分辨率→动态范围→视频编码→帧率→码率→音频→容器，去空去重；音频编码经 `AudioPlaybackDiagnostics.codecLabel` 归一，`mp4a.40.x` → `AAC`；`private record Plate(String key, List<String> labels)` + `stripPlate(...)` 把「牌图已经写明的事实」从文本里剥掉（4K 牌 + "4K" 文本 → 文本变空），DV 牌只写 "Dolby Vision" 故 `DV.P8` 保留为文本 |
 | `app/src/test/java/com/fongmi/android/tv/player/MediaBadgeResolverTest.java` | 新增。11 个纯 JVM 用例（4K/HDR10、DV.P8 取代 HDR10、整数/小数帧率、HLG、SDR 省略、音频缺字段、容器 mime、HLS/DASH 不产容器、扩展名兜底、全空、去重） |
 | `app/src/main/java/com/fongmi/android/tv/setting/PlayerSetting.java` | 新增键 `player_osd_media_badges`（默认 false）与 `player_osd_media_badge_position`（默认 3=右下）；`getDisplayChecked()` 变 8 元素、`putDisplayChecked()` 追加索引 7；`isOsdEnabled()` 计入徽标 |
 | `app/src/main/java/com/fongmi/android/tv/bean/Backup.java` | 两个新键加入 `APP_PREFS`，否则备份/恢复丢设置 |
-| `app/src/main/res/layout/view_player_osd.xml` | 内层 FrameLayout 新增 `FlexboxLayout @+id/osdMediaBadges`（默认 gone、`layout_gravity=bottom\|end`、`flexDirection=column` + `flexWrap=nowrap` + `alignItems=flex_start` → 竖排一列）；4 个既有 TextView 的 id/属性未动 |
-| `app/src/main/res/drawable/ic_badge_*.xml` | 新增 7 个 24dp 单色矢量图标（resolution / dynamic_range / video_codec / frame_rate / bitrate / audio / container），运行时 `setColorFilter(0xFFFFFFFF)` 着白 |
-| `app/src/main/java/com/fongmi/android/tv/ui/custom/PlayerOsdController.java` | 构造内 `root.findViewById(R.id.osdMediaBadges)`（**构造签名不变**）；`controlsVisible` 分支调 `setMediaBadges(player)` 并计入 `hasVisible`；`suppressed && controlsVisible`（mobile 播放器抑制 OSD 根）走 `renderMediaBadgesOnly()` 只放行徽标；常驻路径与 `hidePersistent()` 一律隐藏徽标；`createMediaBadge(MediaBadge)` 生成 `LinearLayout`（`ImageView` 10dp 图标 + 10sp 白字），按 `icon:text|` 签名缓存，只有签名变化才重建子 View；`applyMediaBadgePosition()` 设四角 gravity 并按控制栏高度内缩（上 64dp / 下 80dp） |
+| `app/src/main/res/layout/view_player_osd.xml` | 内层 FrameLayout 新增 `FlexboxLayout @+id/osdMediaBadges`（默认 gone、`layout_gravity=bottom\|end`、`flexDirection=row` + `flexWrap=wrap` + `justifyContent=flex_end` + `alignItems=center` → **同一行横排、放不下才换行**）；4 个既有 TextView 的 id/属性未动 |
+| `app/src/main/res/drawable-nodpi/badge_*.webp` | 新增 18 张现成媒体徽标位图（合计 97,058 字节）：`badge_resolution_{4k,1440p,1080p,720p}`、`badge_visual_{dolby_vision,hdr10,hdr,hlg}`、`badge_encoder_{hevc,avc,av1}`、`badge_audio_{aac,flac,opus,dolby_digital,dolby_digital_plus,dolby_truehd,dts}`；放在 `-nodpi` 保证不随屏幕密度缩放 |
+| `app/src/main/res/drawable/ic_badge_*.xml` | 保留 7 个 24dp 单色矢量图标；其中 **frame_rate / bitrate / container 三个仍作为「无牌事实」的兜底图标**（`mediaBadgeIcon(Icon)`），其余四个在有牌时不再使用；运行时 `setColorFilter(0xFFFFFFFF)` 着白 |
+| `app/src/main/java/com/fongmi/android/tv/ui/custom/PlayerOsdController.java` | 构造内 `root.findViewById(R.id.osdMediaBadges)`（**构造签名不变**）；`controlsVisible` 分支调 `setMediaBadges(player)` 并计入 `hasVisible`；`suppressed && controlsVisible`（mobile 播放器抑制 OSD 根）走 `renderMediaBadgesOnly()` 只放行徽标；常驻路径与 `hidePersistent()` 一律隐藏徽标；`createMediaBadge(MediaBadge)` **三形态**：有牌 → `ImageView`（`wrap_content` × `dp(16)`、`setAdjustViewBounds(true)`、`ScaleType.FIT_CENTER`、`plateResource(plate)`）；无牌 → 通用矢量图标 `dp(11)` 着白；有文本才追加 10sp 白字 `TextView`。全部套 `categoryBackground(Icon)` 动态胶囊；签名串 `icon:plate:text|`，只有签名变化才重建子 View；`applyMediaBadgePosition()` 设四角 gravity 并按控制栏高度内缩（上 64dp / 下 80dp） |
 | `app/src/main/res/drawable/shape_player_osd_badge.xml` | 新增自绘 chip 背景 |
 | 三语 `strings.xml` | `display_media_badges`、`osd_media_badge_position`、`select_media_badge_position` 四角数组；`select_player_osd` **末尾**追加第 8 项（既有 6 项顺序保持不变） |
 | 两设置页布局 + `SettingPlayerActivity` / `SettingPlayerFragment` | `@+id/osdMediaBadgePosition` 行 + `ChoiceDialog.showSingle` 四角单选（leanback 保留 focusable 以支持遥控） |
@@ -107,5 +111,16 @@
 - 徽标内容实测（竖屏 H.264/AAC 样片，竖排一列、每条左侧 10dp 矢量图标）：`656X1280` / `H.264` / `29.94FPS` / `3.1MBPS` / `AAC 2.0 44.1KHZ 64KBPS` / `MP4`。`mp4a.40.2` 已归一为 `AAC`（改造前显示原始 codec 串）。
 - 控制栏自动隐藏后再 dump，只剩 `@id/osd`，**没有 `@id/osdMediaBadges` 节点** → 「只在控制栏可见时显示」语义成立；徽标子 View 不消费触摸，覆盖区域下的 `@id/setting` 仍可点击。
 - 全屏下（`@id/control`=[0,0][1920,900]、顶栏 0–112、底部 seek 759–805）位置 `1`（右上）徽标 `[1644,519][1895,735]`，与进度条不再重叠。
+
+### 第三轮：现成徽标牌 + 横排炫彩（task_guard `osd-badge-plates`，base HEAD `7d4bee6ce1`）
+
+用户要求：徽标改「同一行横排 + 炫彩配色 + 用主流现成图标」（并明确授权忽略许可证问题）。
+
+- 布局：`view_player_osd.xml` 的 `osdMediaBadges` 从竖排一列改回 `row` + `wrap` + `justifyContent=flex_end`。
+- 视觉：`PlayerOsdController` 新增 `categoryBackground(Icon)` / `mediaBadgeColor(Icon)` / `plateResource(String)` / `SVG 兜底 mediaBadgeIcon(Icon)`；chip 背景改为按类别着色的半透明渐变胶囊 + 同类色描边。
+- 牌图：18 张 `drawable-nodpi/badge_*.webp`；`MediaBadgeResolver` 增加 `plate` 字段与 `Plate` 表，牌已写明的事实在文本里去重（`4K` 牌不再跟 `4K` 文本，`Dolby Vision` 牌保留 `DV.P8` 文本）。
+- 单测：`MediaBadgeResolverTest` 扩到 15 用例，含 `plateBadgesDoNotRepeatTheirOwnText`、`audioBadgeWithoutAPlateKeepsTheCodecAsText`、`mp4aCodecIsShownAsAac`。
+- 设备实测（emulator-5554，1920×1080，sdk28，zh-CN，ARM 转译）：`@id/osdMediaBadges` bounds `[119,383][939,423]`（宽 820 高 40，**一行**），子节点依次 `656X1280` / AVC 牌 / `29.94FPS` / `3.1MBPS` / `AAC 2.0 44.1KHZ 64KBPS` / `MP4`；截图目视确认 6 个徽标横排、类别色胶囊描边、AVC 与 AAC 用内置品牌牌、其余为兜底图标 + 文本。
+- 构建：`:app:testMobileArm64_v8aDebugUnitTest --tests *MediaBadgeResolverTest* --tests *PlayerDisplaySettingSyncTest* --tests *ControlDialogOsdSettingsTest*` 与 `:app:compileLeanbackArm64_v8aDebugJavaWithJavac` 均 BUILD SUCCESSFUL；`:app:assembleMobileArm64_v8aDebug` 产出 APK 201,466,985 字节，`adb install -r -t` 成功。
 
 - 既有回归守卫（必须保持通过）：`PlayerDisplaySettingSyncTest`（数组顺序、设置页偏好、四角白色文本、persistentSuppressed 顺序、Backup 键）、`ControlDialogOsdSettingsTest`（两 flavor 芯片 id 与 `getDisplayChecked()`/`putDisplayChecked(checked)`、live 5 项、`onDisplayChanged()` 重启）。

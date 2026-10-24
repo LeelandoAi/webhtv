@@ -91,10 +91,10 @@
             android:layout_height="wrap_content"
             android:layout_gravity="bottom|end"
             android:visibility="gone"
-            app:flexDirection="column"
-            app:flexWrap="nowrap"
-            app:justifyContent="flex_start"
-            app:alignItems="flex_start"
+            app:flexDirection="row"
+            app:flexWrap="wrap"
+            app:justifyContent="flex_end"
+            app:alignItems="center"
             tools:visibility="visible" />
 
     </FrameLayout>

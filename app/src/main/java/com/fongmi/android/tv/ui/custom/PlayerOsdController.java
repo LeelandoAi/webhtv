@@ -2,6 +2,7 @@ package com.fongmi.android.tv.ui.custom;
 
 import android.content.Context;
 import android.content.pm.PackageInfo;
+import android.graphics.drawable.GradientDrawable;
 import android.media.MediaCodecInfo;
 import android.media.MediaCodecList;
 import android.media.MediaFormat;
@@ -426,7 +427,7 @@ public class PlayerOsdController {
         }
         applyMediaBadgePosition();
         StringBuilder signature = new StringBuilder();
-        for (MediaBadgeResolver.MediaBadge badge : badges) signature.append(badge.icon()).append(':').append(badge.text()).append('|');
+        for (MediaBadgeResolver.MediaBadge badge : badges) signature.append(badge.icon()).append(':').append(badge.plate()).append(':').append(badge.text()).append('|');
         String next = signature.toString();
         if (!next.equals(mediaBadgeSignature)) {
             mediaBadgeSignature = next;
@@ -477,37 +478,125 @@ public class PlayerOsdController {
     }
 
     /**
-     * 一个徽标 = 左侧类别图标 + 右侧事实文本。
-     * 图标全部是本地矢量图，不依赖网络，也不使用任何第三方商标图形。
+     * 一个徽标 = 左侧图形 + 右侧事实文本，整块包在一个类别色胶囊里。
+     * 图形优先用随包内置的主流品牌牌（离线可用，不会出现首帧空白）；
+     * 没有对应牌时才退回自绘矢量图标。牌已经写明的字样不会在右侧重复。
      */
     private View createMediaBadge(MediaBadgeResolver.MediaBadge badge) {
         Context context = root.getContext();
+        boolean hasPlate = badge.plate() != null;
+        boolean hasText = badge.text() != null && !badge.text().isEmpty();
         LinearLayout view = new LinearLayout(context);
         view.setOrientation(LinearLayout.HORIZONTAL);
         view.setGravity(Gravity.CENTER_VERTICAL);
         FlexboxLayout.LayoutParams params = new FlexboxLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         params.setMargins(0, dp(2), dp(4), 0);
         view.setLayoutParams(params);
-        view.setBackgroundResource(R.drawable.shape_player_osd_badge);
+        view.setBackground(categoryBackground(badge.icon()));
         view.setPadding(dp(6), dp(2), dp(6), dp(2));
 
         ImageView icon = new ImageView(context);
-        LinearLayout.LayoutParams iconParams = new LinearLayout.LayoutParams(dp(10), dp(10));
-        iconParams.setMarginEnd(dp(3));
+        LinearLayout.LayoutParams iconParams = hasPlate ? new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(16)) : new LinearLayout.LayoutParams(dp(11), dp(11));
+        if (hasPlate && hasText) iconParams.setMarginEnd(dp(4));
         icon.setLayoutParams(iconParams);
-        icon.setImageResource(mediaBadgeIcon(badge.icon()));
-        icon.setColorFilter(0xFFFFFFFF);
+        if (hasPlate) {
+            icon.setImageResource(plateResource(badge.plate()));
+            icon.setAdjustViewBounds(true);
+            icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        } else {
+            icon.setImageResource(mediaBadgeIcon(badge.icon()));
+            icon.setColorFilter(0xFFFFFFFF);
+        }
         view.addView(icon);
 
-        TextView text = new TextView(context);
-        text.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        text.setSingleLine(true);
-        text.setText(badge.text());
-        text.setTextColor(0xFFFFFFFF);
-        text.setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f);
-        text.setShadowLayer(2f, 1.2f, 1.2f, App.get().getResources().getColor(R.color.webhtv_color_player_scrim));
-        view.addView(text);
+        if (hasText) {
+            TextView text = new TextView(context);
+            text.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+            text.setSingleLine(true);
+            text.setText(badge.text());
+            text.setTextColor(0xFFFFFFFF);
+            text.setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f);
+            text.setShadowLayer(2f, 1.2f, 1.2f, App.get().getResources().getColor(R.color.webhtv_color_player_scrim));
+            view.addView(text);
+        }
         return view;
+    }
+
+    /** 类别色胶囊：左侧偏类别色、右侧压暗，既有颜色又保证任意画面下白字可读。 */
+    private GradientDrawable categoryBackground(MediaBadgeResolver.Icon icon) {
+        int color = mediaBadgeColor(icon);
+        GradientDrawable background = new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, new int[]{withAlpha(color, 0x8A), 0xD9040A12});
+        background.setCornerRadius(dp(4));
+        background.setStroke(dp(1), withAlpha(color, 0xE6));
+        return background;
+    }
+
+    private static int withAlpha(int color, int alpha) {
+        return (color & 0x00FFFFFF) | (alpha << 24);
+    }
+
+    /** 每个类别的主题色，徽标胶囊与兜底图标共用。 */
+    private static int mediaBadgeColor(MediaBadgeResolver.Icon icon) {
+        switch (icon) {
+            case RESOLUTION:
+                return 0xFF5A8DEE;
+            case DYNAMIC_RANGE:
+                return 0xFF7B61FF;
+            case VIDEO_CODEC:
+                return 0xFF14B8A6;
+            case FRAME_RATE:
+                return 0xFF10B981;
+            case BITRATE:
+                return 0xFFF59E0B;
+            case AUDIO:
+                return 0xFFEF4444;
+            default:
+                return 0xFF64748B;
+        }
+    }
+
+    /** 牌资源映射：新增牌时只改这里。 */
+    private static int plateResource(String plate) {
+        switch (plate) {
+            case MediaBadgeResolver.PLATE_RES_4K:
+                return R.drawable.badge_resolution_4k;
+            case MediaBadgeResolver.PLATE_RES_1440P:
+                return R.drawable.badge_resolution_1440p;
+            case MediaBadgeResolver.PLATE_RES_1080P:
+                return R.drawable.badge_resolution_1080p;
+            case MediaBadgeResolver.PLATE_RES_720P:
+                return R.drawable.badge_resolution_720p;
+            case MediaBadgeResolver.PLATE_DV:
+                return R.drawable.badge_visual_dolby_vision;
+            case MediaBadgeResolver.PLATE_HDR10:
+                return R.drawable.badge_visual_hdr10;
+            case MediaBadgeResolver.PLATE_HDR:
+                return R.drawable.badge_visual_hdr;
+            case MediaBadgeResolver.PLATE_HLG:
+                return R.drawable.badge_visual_hlg;
+            case MediaBadgeResolver.PLATE_CODEC_HEVC:
+                return R.drawable.badge_encoder_hevc;
+            case MediaBadgeResolver.PLATE_CODEC_AVC:
+                return R.drawable.badge_encoder_avc;
+            case MediaBadgeResolver.PLATE_CODEC_AV1:
+                return R.drawable.badge_encoder_av1;
+            case MediaBadgeResolver.PLATE_AUDIO_AAC:
+                return R.drawable.badge_audio_aac;
+            case MediaBadgeResolver.PLATE_AUDIO_FLAC:
+                return R.drawable.badge_audio_flac;
+            case MediaBadgeResolver.PLATE_AUDIO_OPUS:
+                return R.drawable.badge_audio_opus;
+            case MediaBadgeResolver.PLATE_AUDIO_DD:
+                return R.drawable.badge_audio_dolby_digital;
+            case MediaBadgeResolver.PLATE_AUDIO_DDP:
+                return R.drawable.badge_audio_dolby_digital_plus;
+            case MediaBadgeResolver.PLATE_AUDIO_TRUEHD:
+                return R.drawable.badge_audio_dolby_truehd;
+            case MediaBadgeResolver.PLATE_AUDIO_DTS:
+                return R.drawable.badge_audio_dts;
+            default:
+                return R.drawable.badge_audio_aac;
+        }
     }
 
     private static int mediaBadgeIcon(MediaBadgeResolver.Icon icon) {
