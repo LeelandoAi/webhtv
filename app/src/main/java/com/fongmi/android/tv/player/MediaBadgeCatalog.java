@@ -3,13 +3,13 @@ package com.fongmi.android.tv.player;
 import java.util.regex.Pattern;
 
 /**
- * 徽标牌的完整清单：参考实现（xperience-app badges 26cc3192）里全部 124 条牌的图形键（100 条来自参考实现，24 条来自扩充包）、规范名与识别正则。
+ * 徽标牌的完整清单：参考实现（xperience-app badges 26cc3192）里全部 127 条牌的图形键（100 条来自参考实现，27 条来自扩充包）、规范名与识别正则。
  * <p>
  * 每一条都按 id 与图片一一对应，图形落在 {@code res/drawable-nodpi/badge_<plate>.webp}，
  * 因此这里是「牌」的唯一事实源：新增或删减牌只需改本表与图片。
  * <p>
  * {@code runtime} 为 true 的组（分辨率、动态范围、编码、音频、声道）优先取播放器运行时事实，
- * 只有在运行时拿不到事实时才回退到文件名匹配；其余组（发布来源、画质、特别标签、IMAX、流媒体）
+ * 只有在运行时拿不到事实时才回退到文件名匹配；其余组（发布来源、画质、版别、特别标签、IMAX、流媒体、视频技术）
  * 只能由文件名/标题里的字符串证明，运行时事实给不了这些证据。
  */
 public final class MediaBadgeCatalog {
