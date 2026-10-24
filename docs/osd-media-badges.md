@@ -2,11 +2,11 @@
 
 **Recovery anchor**
 
-- 目标：播放器**唤醒控制栏时**显示当前媒体的徽标（分辨率 / 动态范围 / 画面来源与画质 / 视频编码 / 音频编码 / 声道 / 帧率 / 码率 / 容器 / 特别标签 / IMAX / 流媒体平台），**同一行横排**，每条为「现成徽标牌位图 + 可选文本 + 类别色胶囊」；没有对应牌的事实（帧率 / 码率 / 容器）只显示文本，不再用语义不符的自绘图标。开关进「屏显设置」多选（默认关），位置独立成行四角单选（默认右下角）。
-- 验收：默认关闭时不显示任何徽标；打开开关且媒体信息可解析时，在所选角落按类别色胶囊横排显示徽标；Exo/MPV/IJK 三引擎均不崩溃。（第三轮起按用户明确授权打包现成徽标位图，第四轮扩到参考 JSON 全量 **100 张**，其中含 Dolby / DTS / IMAX / 各家流媒体平台的商标与字标，属于**用户已知并接受**的取舍。）
+- 目标：播放器显示当前媒体的徽标（分辨率 / 动态范围 / 画面来源与画质 / 视频编码 / 音频编码 / 声道 / 帧率 / 码率 / 容器 / 特别标签 / IMAX / 流媒体平台），**同一行横排**，每条为「现成徽标牌位图 + 可选文本 + 类别色胶囊」；没有对应牌的事实（帧率 / 码率 / 容器）只显示文本，不再用语义不符的自绘图标。展示语义两条：**控制栏唤醒时无条件显示**（不看「媒体信息」开关，因为控制栏自带片名与分辨率，徽标是它的补充信息）；**控制栏隐藏时**，只有「屏显设置 → 媒体信息」开关打开才作为常驻项显示，与标题 / 时间 / 进度 / 码率同级。开关进「屏显设置」多选（**默认关**），位置独立成行四角单选（默认右下角）。
+- 验收：开关默认关闭时不显示任何常驻徽标；控制栏一旦唤醒，无论开关与否都显示徽标；打开开关且媒体信息可解析时，控制栏隐藏后徽标也在所选角落按类别色胶囊横排常驻；Exo/MPV/IJK 三引擎均不崩溃。（第三轮起按用户明确授权打包现成徽标位图，第四轮扩到参考 JSON 全量 **100 张**，其中含 Dolby / DTS / IMAX / 各家流媒体平台的商标与字标，属于**用户已知并接受**的取舍。）
 - Lane/scope：task_guard `osd-media-badges`（mode=standard），base HEAD `4dda4b56b8d67e0cb78e6617f7b0f776591383a9`，branch `dev1`。
 - 回滚：单一逻辑提交，回滚该提交即可完整撤销；新增键 `player_osd_media_badges` / `player_osd_media_badge_position` 未被引用时是惰性偏好项，不会影响旧版本行为。
-- 后续任务：`osd-badge-icons`（base HEAD `49e5b2c4bc05a5e1e05f2bc18327d1c02079b9f5`）把徽标从「常驻屏显」改为「控制栏可见时展示」并加图标；`osd-badge-plates`（base HEAD `7d4bee6ce1`）改为横排 + 类别色 + 现成徽标牌；`osd-badge-plates-all`（base HEAD `0dc165a9a2`）把参考 JSON 的 **100 条规则 + 100 张牌图全量入库**，并删掉语义不符的自绘兜底图标。
+- 后续任务：`osd-badge-icons`（base HEAD `49e5b2c4bc05a5e1e05f2bc18327d1c02079b9f5`）把徽标从「常驻屏显」改为「控制栏可见时展示」并加图标；`osd-badge-plates`（base HEAD `7d4bee6ce1`）改为横排 + 类别色 + 现成徽标牌；`osd-badge-plates-all`（base HEAD `0dc165a9a2`）把参考 JSON 的 **100 条规则 + 100 张牌图全量入库**，并删掉语义不符的自绘兜底图标；`osd-badges-persist`（base HEAD `39e1b4a0d4`）把徽标从「只在控制栏可见时渲染」改为「控制栏唤醒无条件显示 + 开关打开后常驻显示」。
 
 ## 1. 需求与取舍
 
@@ -104,8 +104,8 @@
 
 ## 8. 已知缺口（有意为之）
 
-- 徽标**只在控制栏可见时渲染**；控制栏隐藏后常驻屏显不再显示徽标。
-- 四个角位都会从控制栏占用的区域内缩（上两角 `topMargin=64dp`，下两角 `bottomMargin=80dp`），否则会与顶栏按钮列 / 底部进度条重叠。
+- 徽标的两条展示路径：控制栏唤醒时无条件显示（`setMediaBadges` 不再看开关）；控制栏隐藏时由「媒体信息」开关决定（关闭时 `setMediaBadges` 立即隐藏并清空重建签名）。
+- 角位内缩按控制栏状态分支：控制栏可见时上两角 `topMargin=64dp` / 下两角 `bottomMargin=80dp`（避开顶栏按钮列与底部进度条）；控制栏隐藏时上两角 `0`（靠布局自带的 14dp padding）、下两角 `22dp`（抬高一行，避开常驻进度 / 码率文本）。
 - mobile 播放器在 `showControl()` 里先 `setOsdSuppressed(true)` 隐藏整个 OSD 根，因此徽标走 `renderMediaBadgesOnly()` 这条独立放行路径。
 - 徽标与标题/分辨率/时间**允许同角共存**（用户确认）：徽标容器是独立 `FlexboxLayout`，同角重叠时由 `layout_gravity` 决定层级，二者可能相互覆盖——有意的「零侵入」取舍。
 - 文件名类牌依赖**播放器拿到的文件名/标题**：网盘直链常是随机串（如 `/d/xxxxx`），此时这类牌一律不出现；这不是缺陷，是「不编造」的边界。
@@ -123,9 +123,19 @@
 
 - 第 8 个芯片：播放控件弹窗内 `resource-id=com.silent.android.webhtv:id/displayMediaBadges`、`text=媒体信息`；点击后 `selected` false→true，prefs 落盘 `<boolean name="player_osd_media_badges" value="true" />`。
 - 屏显设置多选摘要：勾选后 `@id/osdText` 显示「媒体信息」，证明 8 项 `select_player_osd` 与 8 元素 `getDisplayChecked()` 长度同步、无索引错位。
-- 位置四角（`player_osd_media_badge_position` → `@id/osdMediaBadges` bounds）：`0` 左上 / `1` 右上 / `2` 左下 / `3` 右下（默认），四角均内缩避开控制栏。
-- 控制栏自动隐藏后再 dump，只剩 `@id/osd`，**没有 `@id/osdMediaBadges` 节点** → 「只在控制栏可见时显示」语义成立。
+- 位置四角（`player_osd_media_badge_position` → `@id/osdMediaBadges` bounds）：`0` 左上 / `1` 右上 / `2` 左下 / `3` 右下（默认），控制栏可见时四角均内缩避开控制栏。
+- 控制栏自动隐藏后再 dump，只剩 `@id/osd`，**没有 `@id/osdMediaBadges` 节点** → 这条是**改动前**（开关关闭）的观测；`osd-badges-persist` 之后改为：开关关闭时依旧如此，开关打开时常驻路径同样渲染徽标（见 §9 本轮实测）。
 - 全屏下位置 `1`（右上）徽标 `[1644,519][1895,735]`，与进度条不重叠。
+
+### 第五轮：常驻显示 + 控制栏唤醒无条件显示（task_guard `osd-badges-persist`，base HEAD `39e1b4a0d4`）
+
+用户原话：「媒体信息在屏显设置中开启时非控制栏唤醒的时候也显示和其他屏显一样，但是默认关闭，控制栏唤醒的时候不关是否开启了这个屏显都显示」。据此语义拆成两条：开关打开后控制栏隐藏时常驻显示；控制栏唤醒时无条件显示。
+
+- 设备实测（emulator-5554，同一部样片，prefs 直接改写 `player_osd_media_badges` 与 `player_osd_title` 后 `run-as ... cp` 回写）：
+  - 开关**打开**、控制栏**隐藏**（全屏常驻路径）：`@id/osd` 与 `@id/osdMediaBadges` 同时在树中，`@id/osdMediaBadges` bounds `[163,444][939,524]`，子节点文本 `44.1KHZ 64KBPS` / `29.94FPS` / `3.1MBPS` / `MP4`（另有 5 枚纯牌位图节点无文本）→ 徽标与标题同属常驻屏显。截图目视 9 枚横排徽标（HD / Dolby VISION·HDR10 / WebDL / AVC / AAC 44.1KHZ 64KBPS / 2.0 / 29.94FPS / 3.1MBPS / MP4）。
+  - 开关**关闭**、控制栏**隐藏**：`id/osd` 0 处、`osdMediaBadges` 0 处 → 与其它屏显项一致全部不显示（默认行为不变）。
+  - 开关**关闭**、控制栏**唤醒**：`id/osd` 1 处、`osdMediaBadges` 1 处，bounds `[101,183][703,299]`，文本 `44.1KHZ 64KBPS` / `29.94FPS` / `3.1MBPS` → **无需打开开关即显示**，两条需求同时成立。
+- 注意 `input tap 960 540` 在 TMDB 详情小窗上会落到右侧信息区的按钮（曾误入「搜索」底部弹窗），唤醒控制栏应点小窗内的视频区域（本次用 `input tap 500 330`）。
 
 ### 第三轮：现成徽标牌 + 横排炫彩（task_guard `osd-badge-plates`，base HEAD `7d4bee6ce1`）
 

@@ -259,12 +259,9 @@ public class PlayerOsdController {
             return false;
         }
 
-        // 控制栏隐藏时，按用户设置显示；媒体信息徽标只在控制栏出现时展示
+        // 控制栏隐藏时，按用户设置显示常驻屏显；用户打开「媒体信息」开关后，
+        // 徽标与标题 / 时间 / 进度 / 码率同级常驻，不再依赖控制栏是否唤醒。
         root.setVisibility(View.VISIBLE);
-        if (mediaBadges != null) {
-            mediaBadges.setVisibility(View.GONE);
-            mediaBadgeSignature = "";
-        }
         if (persistentSuppressed) {
             hidePersistent();
             setDiagnosticsPanel(player);
@@ -277,6 +274,16 @@ public class PlayerOsdController {
         setBottomRight();
         setDiagnosticsPanel(player);
         setMiniProgress(player);
+        setMediaBadges(player);
+        // 常驻项（含媒体信息徽标）全不可见时不再保留一个空的 OSD 根
+        boolean persistentVisible = topLeft.getVisibility() == View.VISIBLE
+                || topRight.getVisibility() == View.VISIBLE
+                || bottomLeft.getVisibility() == View.VISIBLE
+                || bottomRight.getVisibility() == View.VISIBLE
+                || diagnosticsPanel.getVisibility() == View.VISIBLE
+                || (mediaBadges != null && mediaBadges.getVisibility() == View.VISIBLE)
+                || (miniProgress != null && miniProgress.getVisibility() == View.VISIBLE);
+        root.setVisibility(persistentVisible ? View.VISIBLE : View.GONE);
         return true;
     }
 
@@ -426,8 +433,9 @@ public class PlayerOsdController {
      */
     private void setMediaBadges(PlayerManager player) {
         if (mediaBadges == null) return;
-        // 徽标只在唤醒控制栏时展示：控制栏隐藏的常驻屏显里保持干净。
-        if (!controlsVisible || !PlayerSetting.isDisplayMediaBadges() || player == null) {
+        // 控制栏唤醒时无条件展示（控制栏自带片名与分辨率，徽标是它的补充信息）；
+        // 控制栏隐藏时只在用户打开「媒体信息」开关后作为常驻项展示。
+        if (player == null || (!controlsVisible && !PlayerSetting.isDisplayMediaBadges())) {
             mediaBadges.setVisibility(View.GONE);
             mediaBadgeSignature = "";
             return;
@@ -454,36 +462,40 @@ public class PlayerOsdController {
     }
 
     /**
-     * 徽标只在控制栏可见时渲染，而控制栏本身占据画面顶部与底部，
-     * 因此四角位置都要从控制栏高度内缩，否则徽标会压住标题栏或进度条。
+     * 控制栏可见时，控制栏本身占据画面顶部与底部，四角都要从控制栏高度内缩，
+     * 否则徽标会压住标题栏或进度条。
+     * 控制栏隐藏时徽标是常驻项：只需让开布局自带的 14dp 内边距，
+     * 但下两角要抬高一条文本行，避免与常驻的进度 / 码率文本重叠。
      */
     private void applyMediaBadgePosition() {
         ViewGroup.LayoutParams params = mediaBadges.getLayoutParams();
         if (!(params instanceof FrameLayout.LayoutParams)) return;
         FrameLayout.LayoutParams layoutParams = (FrameLayout.LayoutParams) params;
+        int topInset = controlsVisible ? dp(64) : 0;
+        int bottomInset = controlsVisible ? dp(80) : dp(22);
         int gravity;
         int topMargin;
         int bottomMargin;
         switch (PlayerSetting.getMediaBadgePosition()) {
             case 0:
                 gravity = Gravity.TOP | Gravity.START;
-                topMargin = dp(64);
+                topMargin = topInset;
                 bottomMargin = 0;
                 break;
             case 1:
                 gravity = Gravity.TOP | Gravity.END;
-                topMargin = dp(64);
+                topMargin = topInset;
                 bottomMargin = 0;
                 break;
             case 2:
                 gravity = Gravity.BOTTOM | Gravity.START;
                 topMargin = 0;
-                bottomMargin = dp(80);
+                bottomMargin = bottomInset;
                 break;
             default:
                 gravity = Gravity.BOTTOM | Gravity.END;
                 topMargin = 0;
-                bottomMargin = dp(80);
+                bottomMargin = bottomInset;
                 break;
         }
         if (layoutParams.gravity == gravity && layoutParams.topMargin == topMargin && layoutParams.bottomMargin == bottomMargin) return;
