@@ -79,5 +79,18 @@ beta 侧 13 个提交：`ee285f8e85`（PR #487 合并）、`02fc09ede4`（C104 �
 
 ## 8. 状态
 
-- 合并、评审、验证、复评：**完成**。
-- 提交 / 推送 / PR / 拉取：由本轮 `task_guard finish` 及其后续步骤完成，坐标回填于本文件末尾。
+- 合并、评审、验证、复评、提交、推送、PR、拉取：**全部完成**，工作树干净。
+
+### 交付坐标
+
+| 项 | 值 |
+| --- | --- |
+| 合并提交 | `db0b4483b35` `merge: 合并 origin/beta ee285f8e85 并评审 dev4 未推送修复` |
+| 恢复标签 | `recovery/C105-BETA-MERGE-DEV4-20261025/20261025035025-db0b4483b35a` |
+| 推送 | `origin/dev4` `306b823dc7b..db0b4483b35` |
+| PR | [#489 dev4 → beta](https://github.com/Silent1566/webhtv/pull/489)（仅创建，未合并） |
+| 拉取 | `git fetch origin --prune` + `git pull --ff-only origin dev4` = Already up to date |
+
+### 下一动作
+
+无。等待 PR #489 评审/合并（本轮只创建 PR，不合并）。
